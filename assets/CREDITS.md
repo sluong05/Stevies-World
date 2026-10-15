@@ -17,7 +17,8 @@ The photographs support the home page and representative fallbacks for older per
 
 ## Your cookbook recipes
 
-- `japanese-curry.jpg`: **Vegetable curry rice**, by **pelican** from Tokyo, Japan. [Original on Wikimedia Commons](https://commons.wikimedia.org/wiki/File:Vegetable_curry_rice_(14974664885).jpg), [original Flickr source](https://www.flickr.com/photos/pelican/14974664885/), [CC BY-SA 2.0](https://creativecommons.org/licenses/by-sa/2.0/). Downloaded as a 960-pixel thumbnail; displayed cropped to fit. Serving inspiration only; the pictured rice and vegetables may differ from the recipe. The photograph retains its individual license.
+- `chicken-katsu-curry.jpg`: photograph supplied by the site owner on October 15, 2026, used directly without image alteration. Displayed cropped to fit the website layout. The rice is included in the recipe estimates; the extra egg topping shown is optional and excluded.
+
 - `beef-udon.png`: AI-assisted adaptation of the food photograph in the site owner's cookbook screenshot supplied October 15, 2026. Prepared with the built-in image tool. Optional eggs and garnish pictured are excluded from the base recipe estimates.
 
 Image edit prompt: Extract only the lower-right beef udon photograph from the supplied cookbook screenshot, excluding all handwriting and application UI. Preserve the white bowl, noodles, beef, egg halves, scallions, countertop, camera angle and lighting; no added text or objects. The result is labeled as an adaptation because image generation can alter details.

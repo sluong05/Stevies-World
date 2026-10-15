@@ -4,11 +4,14 @@ import { ingredientReferences, estimatePlans, calculateEstimates } from '../data
 import { recipes } from '../content.js';
 import { recipeMetrics } from '../recipe-search.js';
 
-test('the whole small curry box uses five label servings; sides are not silently counted', () => {
+test('the combined katsu curry includes chicken, coating, absorbed oil and the requested rice', () => {
   assert.deepEqual(ingredientReferences.curry.nutrition, { calories: 450, protein: 5, carbs: 45, fat: 25 });
   assert.equal(estimatePlans['japanese-curry-for-katsu'].servings, 4);
-  assert.equal(estimatePlans['japanese-curry-for-katsu'].amounts.some(([key]) => /rice|katsu|sugar/.test(key)), false);
-  assert.deepEqual(calculateEstimates('japanese-curry-for-katsu').nutrition, { calories: 229, protein: 3.5, carbs: 31.1, fat: 9.8 });
+  const amounts = Object.fromEntries(estimatePlans['japanese-curry-for-katsu'].amounts);
+  assert.deepEqual([amounts.chicken, amounts.flour, amounts.egg, amounts.panko, amounts.fryingOil, amounts.oil, amounts.rice], [600, 60, 100, 100, 40, 13.5, 200]);
+  assert.equal(recipes.find(item => item.id === 'japanese-curry-for-katsu').title, 'Chicken Katsu Curry');
+  assert.equal(estimatePlans['japanese-curry-for-katsu'].amounts.some(([key]) => /salad|sugar/.test(key)), false);
+  assert.deepEqual(calculateEstimates('japanese-curry-for-katsu').nutrition, { calories: 859, protein: 48.6, carbs: 102.4, fat: 26.5 });
 });
 
 test('udon counts beef sauce and broth seasonings together, with optional eggs excluded', () => {

@@ -4,7 +4,7 @@ A personal home for your recipes and healthy living information. Browse, read, r
 
 ## What's included
 
-- Your two handwritten cookbook recipes: Japanese Curry (for Katsu) and Beef Udon (Niku Udon), with researched nutrition and cost estimates.
+- Your two handwritten cookbook recipes: Chicken Katsu Curry and Beef Udon (Niku Udon), with researched nutrition and cost estimates.
 - Five source-linked guides covering nutrition, sleep, movement, hydration, and food safety.
 - Recipe photos, ingredients, instructions, timing, servings, source links, tags, and notes.
 - Optional macros and meal costs, with per-serving and whole-recipe views.
@@ -62,7 +62,7 @@ Only the two recipes you supplied are included in the shared cookbook. The previ
 
 Health guides provide general adult educational information with primary sources and review dates. They are not personalized medical advice. Revisit source guidance when updating them.
 
-The curry photo is credited serving inspiration. The beef udon image is an AI-assisted adaptation of the food photo in your supplied cookbook screenshot; its optional toppings are not included in the base estimates. The home-page image and fallback photos for older backups are representative serving inspiration. Credits are in [assets/CREDITS.md](assets/CREDITS.md). These images are included in the repository. Fonts load from Google Fonts with system fallbacks.
+The chicken katsu curry photo was supplied by you. Rice is included in its recipe estimates; the extra egg topping pictured is excluded. The beef udon image is an AI-assisted adaptation of the food photo in your supplied cookbook screenshot; its optional toppings are not included in the base estimates. The home-page image and fallback photos for older backups are representative serving inspiration. Credits are in [assets/CREDITS.md](assets/CREDITS.md). These images are included in the repository. Fonts load from Google Fonts with system fallbacks.
 
 ## Project structure
 
