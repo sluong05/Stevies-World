@@ -5,6 +5,7 @@ A personal home for recipes and healthy living information. Browse, read, resear
 ## What's included
 
 - Six original starter recipes with ingredients, instructions, approximate timing, and food-safety notes.
+- Expandable macros and estimated meal costs, with per-serving and whole-recipe views.
 - Five source-linked guides covering nutrition, sleep, movement, hydration, and food safety.
 - Search across titles, ingredients, tags, and guide content; category filters and bookmarks.
 - Add, edit, and remove your own recipes and health notes, with optional source links.
@@ -56,6 +57,10 @@ If saved browser data cannot be read, the app pauses writes to protect the origi
 
 Recipes are original starter concepts, not kitchen-tested recipes. Preparation times are estimates. Food photography is representative serving inspiration. Image source credits are in [assets/CREDITS.md](assets/CREDITS.md).
 
+Each starter recipe includes estimated calories, protein, carbohydrates, and fat per serving, plus an estimated total ingredient cost in USD. Open **Macros** or **Estimated cost** inside a recipe, and use **Amounts** to switch between one serving and the whole recipe. Whole-recipe macros scale the rounded per-serving values. Costs reflect ingredient amounts used, not the cost of buying every full package, and vary by store and location. See [ESTIMATES.md](ESTIMATES.md) for calculation assumptions and sources.
+
+When adding or editing a personal recipe, expand **Macros & meal cost** to enter all four macro values per serving and/or the total recipe cost. These fields are optional; unknown values stay unavailable rather than showing zero. Personal values are entered manually, not calculated automatically from ingredient text, and are preserved in library backups.
+
 Health guides are general adult educational information, with primary sources and review dates. They are not personalized medical advice. Revisit source guidance when updating the collection.
 
 Fonts load from Google Fonts, with local system fallbacks. All food photos are included in the repository, so they do not depend on a remote image service.
@@ -66,6 +71,7 @@ Fonts load from Google Fonts, with local system fallbacks. All food photos are i
 - `styles.css` — responsive design
 - `app.js` — browsing, dialogs, research, and editing
 - `content.js` — starter recipes and guides
+- `estimates.js` — nutrition and cost estimates for the starter recipes
 - `storage.js` — validated portable library format and merge rules
 - `assets/` — photos and brand icon
 - `scripts/` — dependency-free build and local preview

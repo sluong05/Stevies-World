@@ -17,6 +17,8 @@ const article = (overrides = {}) => ({
   ...overrides,
 });
 const backup = (entries = [], saved = []) => ({ version: 1, entries, saved });
+const nutrition = (overrides = {}) => ({ calories: 420, protein: 24.5, carbs: 56, fat: 11.2, ...overrides });
+const cost = (overrides = {}) => ({ total: 8.75, currency: 'USD', ...overrides });
 
 test('empty libraries are independent, valid starting points', () => {
   const first = emptyLibrary();
@@ -137,4 +139,92 @@ test('invalid imports and merged size limits never mutate the existing library',
   const full = backup(Array.from({ length: 1000 }, (_, i) => article({ id: `personal-${i}` })));
   assert.throws(() => mergeLibraries(full, backup([recipe()])));
   assert.equal(full.entries.length, 1000);
+});
+
+test('older exports remain valid without adding empty nutrition or cost properties', () => {
+  const result = validateLibrary(backup([recipe(), article()]));
+  for (const entry of result.entries) {
+    assert.equal(Object.hasOwn(entry, 'nutrition'), false);
+    assert.equal(Object.hasOwn(entry, 'cost'), false);
+  }
+  assert.deepEqual(validateLibrary(JSON.parse(JSON.stringify(result))), result);
+});
+
+test('optional recipe estimates round-trip with provenance and only known properties', () => {
+  const result = validateLibrary(backup([recipe({
+    nutrition: nutrition({ note: 'Per serving, using the ingredients listed.', sources: [{ label: 'Nutrition reference', url: 'https://EXAMPLE.com/nutrition', html: '<script>bad()</script>' }], servingSize: 'unknown' }),
+    cost: cost({ note: 'Full recipe, using the portion of each ingredient.', sources: [{ label: 'Price reference', url: 'https://EXAMPLE.com/prices', retailSecret: true }], region: 'unknown' }),
+  })]));
+  assert.deepEqual(result.entries[0].nutrition, nutrition({ note: 'Per serving, using the ingredients listed.', sources: [{ label: 'Nutrition reference', url: 'https://example.com/nutrition' }] }));
+  assert.deepEqual(result.entries[0].cost, cost({ note: 'Full recipe, using the portion of each ingredient.', sources: [{ label: 'Price reference', url: 'https://example.com/prices' }] }));
+  assert.deepEqual(validateLibrary(JSON.parse(JSON.stringify(result))), result);
+  const bare = validateLibrary(backup([recipe({ nutrition: nutrition(), cost: cost() })])).entries[0];
+  assert.deepEqual(bare.nutrition, nutrition());
+  assert.deepEqual(bare.cost, cost());
+});
+
+test('nutrition and cost can be stored independently and accept zero and their upper limits', () => {
+  const nutritionOnly = validateLibrary(backup([recipe({ nutrition: nutrition({ calories: 0, protein: 0, carbs: 0, fat: 0 }) })])).entries[0];
+  assert.deepEqual(nutritionOnly.nutrition, { calories: 0, protein: 0, carbs: 0, fat: 0 });
+  assert.equal(Object.hasOwn(nutritionOnly, 'cost'), false);
+  const costOnly = validateLibrary(backup([recipe({ cost: cost({ total: 0 }) })])).entries[0];
+  assert.equal(costOnly.cost.total, 0);
+  assert.equal(Object.hasOwn(costOnly, 'nutrition'), false);
+  assert.doesNotThrow(() => validateLibrary(backup([recipe({ nutrition: nutrition({ calories: 20000, protein: 5000, carbs: 5000, fat: 5000 }), cost: cost({ total: 1000000 }) })])));
+});
+
+test('estimate objects reject malformed values, even when falsy', () => {
+  for (const field of ['nutrition', 'cost']) {
+    for (const value of [undefined, null, false, true, 0, '', '400', [], [nutrition()], {}]) {
+      assert.throws(() => validateLibrary(backup([recipe({ [field]: value })])), new RegExp(field), `${field}: ${String(value)}`);
+    }
+  }
+});
+
+test('nutrition requires all four bounded numeric values without coercion', () => {
+  for (const field of ['calories', 'protein', 'carbs', 'fat']) {
+    for (const value of [undefined, null, false, '', '25', -0.1, NaN, Infinity, -Infinity, field === 'calories' ? 20000.01 : 5000.01]) {
+      assert.throws(() => validateLibrary(backup([recipe({ nutrition: nutrition({ [field]: value }) })])), /nutrition/, `${field}: ${String(value)}`);
+    }
+    const incomplete = nutrition();
+    delete incomplete[field];
+    assert.throws(() => validateLibrary(backup([recipe({ nutrition: incomplete })])), /nutrition/, `missing ${field}`);
+  }
+});
+
+test('cost requires a bounded numeric full-recipe total and explicit USD currency', () => {
+  for (const total of [undefined, null, false, '', '8.75', -0.01, NaN, Infinity, -Infinity, 1000000.01]) {
+    assert.throws(() => validateLibrary(backup([recipe({ cost: cost({ total }) })])), /cost/, `total: ${String(total)}`);
+  }
+  for (const currency of [undefined, null, false, 0, '', 'usd', 'EUR']) {
+    assert.throws(() => validateLibrary(backup([recipe({ cost: cost({ currency }) })])), /cost/, `currency: ${String(currency)}`);
+  }
+});
+
+test('estimate notes and source links are bounded and reject unsafe or malformed provenance', () => {
+  for (const [field, estimate] of [['nutrition', nutrition], ['cost', cost]]) {
+    for (const note of [undefined, null, false, 0, [], 'x'.repeat(1201)]) {
+      assert.throws(() => validateLibrary(backup([recipe({ [field]: estimate({ note }) })])), new RegExp(field));
+    }
+    for (const sources of [undefined, null, false, '', {}, [null], [[]], [{}], [{ label: '', url: 'https://example.com' }], [{ label: ' ', url: 'https://example.com' }], [{ label: 'x'.repeat(201), url: 'https://example.com' }], [{ label: 'Reference', url: 'javascript:alert(1)' }], [{ label: 'Reference', url: '/relative' }], [{ label: 'Reference', url: 5 }], [{ label: 'Reference', url: `https://example.com/${'x'.repeat(2000)}` }], Array(101).fill({ label: 'Reference', url: 'https://example.com' })]) {
+      assert.throws(() => validateLibrary(backup([recipe({ [field]: estimate({ sources }) })])), new RegExp(field));
+    }
+    assert.doesNotThrow(() => validateLibrary(backup([recipe({ [field]: estimate({ note: '', sources: [] }) })])));
+    assert.doesNotThrow(() => validateLibrary(backup([recipe({ [field]: estimate({ note: 'x'.repeat(1200), sources: [{ label: 'x'.repeat(200), url: 'http://example.com/' }] }) })])));
+  }
+});
+
+test('merging imports preserves estimates and updates matching recipes without mutating inputs', () => {
+  const current = validateLibrary(backup([recipe({ nutrition: nutrition(), cost: cost() }), recipe({ id: 'personal-keep', nutrition: nutrition({ calories: 510 }) })], ['personal-recipe']));
+  const incoming = backup([recipe({ nutrition: nutrition({ calories: 450 }), cost: cost({ total: 10.25, note: 'Updated grocery prices.' }) }), recipe({ id: 'personal-legacy' })]);
+  const before = JSON.stringify([current, incoming]);
+  const result = mergeLibraries(current, incoming);
+  assert.deepEqual(result.entries.find(entry => entry.id === 'personal-recipe').nutrition, nutrition({ calories: 450 }));
+  assert.deepEqual(result.entries.find(entry => entry.id === 'personal-recipe').cost, cost({ total: 10.25, note: 'Updated grocery prices.' }));
+  assert.deepEqual(result.entries.find(entry => entry.id === 'personal-keep').nutrition, nutrition({ calories: 510 }));
+  assert.equal(Object.hasOwn(result.entries.find(entry => entry.id === 'personal-legacy'), 'nutrition'), false);
+  assert.deepEqual(mergeLibraries(result, backup()), result);
+  assert.equal(JSON.stringify([current, incoming]), before);
+  assert.throws(() => mergeLibraries(current, backup([recipe({ nutrition: nutrition({ fat: -1 }) })])), /nutrition/);
+  assert.equal(JSON.stringify([current, incoming]), before);
 });
