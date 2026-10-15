@@ -5,9 +5,11 @@ A personal home for recipes and healthy living information. Browse, read, resear
 ## What's included
 
 - Six original starter recipes with ingredients, instructions, approximate timing, and food-safety notes.
+- 100 additional high-protein budget meals: 20 breakfasts, 40 lunches, and 40 dinners, each calculated at 25 g+ protein and $4 USD or less per serving under documented price assumptions.
 - Expandable macros and estimated meal costs, with per-serving and whole-recipe views.
 - Five source-linked guides covering nutrition, sleep, movement, hydration, and food safety.
 - Search across titles, ingredients, tags, and guide content; category filters and bookmarks.
+- A protein-and-budget filter, per-serving protein/cost labels, and progressive recipe browsing in groups of 18.
 - Add, edit, and remove your own recipes and health notes, with optional source links.
 - Export and import a JSON backup of your personal collection.
 - A research box that opens Google in a new tab, plus links to recipe and health resources.
@@ -59,6 +61,8 @@ Recipes are original starter concepts, not kitchen-tested recipes. Preparation t
 
 Each starter recipe includes estimated calories, protein, carbohydrates, and fat per serving, plus an estimated total ingredient cost in USD. Open **Macros** or **Estimated cost** inside a recipe, and use **Amounts** to switch between one serving and the whole recipe. Whole-recipe macros scale the rounded per-serving values. Costs reflect ingredient amounts used, not the cost of buying every full package, and vary by store and location. See [ESTIMATES.md](ESTIMATES.md) for calculation assumptions and sources.
 
+The 100 budget meals use original instructions, USDA ingredient composition data, and representative grocery references plus explicit budget assumptions. They use illustrative meal artwork rather than dish photography. Their calculations and source details are documented in [BUDGET-MEALS.md](BUDGET-MEALS.md). Meal times start with any listed cooked grains or lentils already prepared. The recipes have not been kitchen-tested; substitutions affect both nutrition and cost.
+
 When adding or editing a personal recipe, expand **Macros & meal cost** to enter all four macro values per serving and/or the total recipe cost. These fields are optional; unknown values stay unavailable rather than showing zero. Personal values are entered manually, not calculated automatically from ingredient text, and are preserved in library backups.
 
 Health guides are general adult educational information, with primary sources and review dates. They are not personalized medical advice. Revisit source guidance when updating the collection.
@@ -72,6 +76,9 @@ Fonts load from Google Fonts, with local system fallbacks. All food photos are i
 - `app.js` — browsing, dialogs, research, and editing
 - `content.js` — starter recipes and guides
 - `estimates.js` — nutrition and cost estimates for the starter recipes
+- `budget-meals.js` — builds the 100-recipe collection and calculates its estimates
+- `data/meal-plans.js` — original recipes and ingredient grams per serving
+- `data/ingredients.js` — USDA nutrients and documented ingredient price assumptions
 - `storage.js` — validated portable library format and merge rules
 - `assets/` — photos and brand icon
 - `scripts/` — dependency-free build and local preview
