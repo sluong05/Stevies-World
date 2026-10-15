@@ -12,3 +12,5 @@ Food photographs downloaded from Unsplash for use in Stevies World. These are re
 | `soup.jpg` | Cala | [Autumn Soup](https://unsplash.com/photos/w6ftFbPCs9I) | [Image](https://images.unsplash.com/photo-1476718406336-bb5a9690ee2a?fit=max&fm=jpg&w=1100&h=1100&q=85) |
 
 The current photo pages identify the images as free to use under the [Unsplash License](https://unsplash.com/license). Cala's October 2016 photo was originally released under CC0, as recorded by [Wikimedia Commons](https://commons.wikimedia.org/wiki/File:Autumn_Soup_(Unsplash).jpg).
+
+The photographs support the home page and representative fallbacks for older personal recipe backups. There are no built-in recipes.

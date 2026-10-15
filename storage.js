@@ -1,3 +1,4 @@
+import { validatePhoto } from './photo-utils.js';
 export const STORAGE_KEY = 'stevies-world.library.v1';
 export const emptyLibrary = () => ({ version: 1, saved: [], entries: [] });
 export const safeUrl = value => {
@@ -28,7 +29,7 @@ function validateEstimate(value, kind) {
   }
   return result;
 }
-export function validateLibrary(value) {
+export function validateLibrary(value, { requireRecipePhotos = false } = {}) {
   if (!value || value.version !== 1 || !Array.isArray(value.saved) || !Array.isArray(value.entries) || value.entries.length > 1000 || value.saved.length > 2000) throw new Error('Choose a Stevies World library export (version 1).');
   if (!value.saved.every(x => string(x, 160))) throw new Error('The backup contains invalid saved items.');
   const entries = value.entries.map(entry => {
@@ -37,6 +38,7 @@ export function validateLibrary(value) {
     if (entry.type === 'recipe') {
       if (!Number.isFinite(entry.minutes) || entry.minutes < 1 || entry.minutes > 1440 || !Number.isInteger(entry.servings) || entry.servings < 1 || entry.servings > 100 || !lines(entry.ingredients) || !entry.ingredients.length || !lines(entry.steps) || !entry.steps.length) throw new Error('A recipe in this backup is missing valid ingredients, steps, or timing.');
       Object.assign(result, { minutes: entry.minutes, servings: entry.servings, ingredients: entry.ingredients, steps: entry.steps });
+      if (owns(entry, 'photo') || requireRecipePhotos) result.photo = validatePhoto(entry.photo, { required: true });
       if (owns(entry, 'nutrition')) result.nutrition = validateEstimate(entry.nutrition, 'nutrition');
       if (owns(entry, 'cost')) result.cost = validateEstimate(entry.cost, 'cost');
     } else {

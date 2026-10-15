@@ -1,18 +1,15 @@
 # Stevies World
 
-A personal home for recipes and healthy living information. Browse, read, research, and keep useful finds. No goals, streaks, habit tracking, or completion checklists.
+A personal home for your recipes and healthy living information. Browse, read, research, and keep useful finds. No goals, streaks, habit tracking, or completion checklists.
 
 ## What's included
 
-- Six original starter recipes with ingredients, instructions, approximate timing, and food-safety notes.
-- 100 additional high-protein budget meals: 20 breakfasts, 40 lunches, and 40 dinners, each calculated at 25 g+ protein and $4 USD or less per serving under documented price assumptions.
-- Expandable macros and estimated meal costs, with per-serving and whole-recipe views.
+- An empty recipe collection, ready for recipes you add yourself.
 - Five source-linked guides covering nutrition, sleep, movement, hydration, and food safety.
-- Search across titles, ingredients, tags, and guide content; category filters and bookmarks.
-- A protein-and-budget filter, per-serving protein/cost labels, and progressive recipe browsing in groups of 18.
-- Add, edit, and remove your own recipes and health notes, with optional source links.
-- Export and import a JSON backup of your personal collection.
-- A research box that opens Google in a new tab, plus links to recipe and health resources.
+- Recipe photos, ingredients, instructions, timing, servings, source links, tags, and notes.
+- Optional macros and meal costs, with per-serving and whole-recipe views.
+- Combined filters for price, protein, calories, protein per 100 calories, and cooking time, plus sorting and category filters.
+- Bookmarks, a research box that opens Google, and JSON library exports/imports.
 - Responsive layouts, keyboard navigation, accessible dialogs, and reduced-motion support.
 
 ## Run locally
@@ -31,11 +28,11 @@ npm run build
 npm run preview
 ```
 
-The development server is intentionally limited to the local computer. Stop it before starting the preview server, since both use port 4173. Set `PORT` to choose another port.
+Stop the development server before starting the preview server, since both use port 4173. Set `PORT` to choose another port.
 
 ## Deploy on Vercel
 
-Import `sluong05/Stevies-World` into Vercel as a new project. The included `vercel.json` configures:
+Import `sluong05/Stevies-World`. The included `vercel.json` configures:
 
 | Setting | Value |
 | --- | --- |
@@ -47,41 +44,38 @@ Import `sluong05/Stevies-World` into Vercel as a new project. The included `verc
 
 Vercel can redeploy when new commits reach the connected branch. See [Vercel's build configuration documentation](https://vercel.com/docs/builds/configure-a-build).
 
-## How your library works
+## Your recipes and library
 
-Personal additions and bookmarks are saved in **localStorage in the current browser**. They do not sync between devices or write back to GitHub. Clearing website data removes them. Export from **Your library & backups** to keep a copy; import that file on another device. Imports merge entries by ID, updating matching personal entries without removing other items.
+Choose **Add a find** or **Add your first recipe**. Recipes require a title, description, category, timing, servings, ingredients, instructions, and a photo. Upload a JPEG, PNG, or WebP up to 15 MB (compressed locally before saving), or paste a working direct HTTPS image link. Photo descriptions and source credits are optional. New and edited recipes cannot be saved without a working photo.
 
-The starter collection lives in `content.js`. To publish new shared content for everyone, edit that file and push a commit. The site intentionally has no account system, database, API keys, automatic recipe scraping, or medical personalization.
+Expand **Macros & meal cost** to enter all four macro values for one serving and/or the cost of ingredients used in the whole recipe. These fields are optional and entered manually, not calculated from ingredient text. Unknown values stay unavailable instead of showing zero. Costs are in USD and exclude the extra cost of buying full packages. Open **Macros** or **Estimated cost** in a recipe to view per-serving or whole-recipe values.
 
-If saved browser data cannot be read, the app pauses writes to protect the original. Export preserves the original payload for recovery. Importing a valid backup can restore the collection; the prior raw data is also preserved under the `stevies-world.library.v1.recovery` browser-storage key.
+Use **More filters** to combine minimum/maximum price, protein, calories, protein per 100 kcal, and maximum cooking time. All amounts are per serving. Protein density is protein ÷ calories × 100. A recipe with an unknown estimate is excluded only when filtering that estimate; sorting places unknown values last. Search and filters are preserved in the page URL.
 
-## Content and photography
+Personal additions and bookmarks are saved in **localStorage in the current browser**. They do not sync between devices or write back to GitHub. Clearing website data removes them. Export from **Your library & backups** to keep a copy, then import it on another device. Uploaded photos are included in the backup; external image links depend on their host. Imports merge entries by ID without removing other entries. Older backups without photos remain compatible and display representative serving inspiration until edited.
 
-Recipes are original starter concepts, not kitchen-tested recipes. Preparation times are estimates. Food photography is representative serving inspiration. Image source credits are in [assets/CREDITS.md](assets/CREDITS.md).
+If saved browser data cannot be read, the app pauses writes to protect the original. Export preserves the original payload for recovery. Importing a valid backup can restore the collection; the previous raw data is also preserved under the `stevies-world.library.v1.recovery` browser-storage key.
 
-Each starter recipe includes estimated calories, protein, carbohydrates, and fat per serving, plus an estimated total ingredient cost in USD. Open **Macros** or **Estimated cost** inside a recipe, and use **Amounts** to switch between one serving and the whole recipe. Whole-recipe macros scale the rounded per-serving values. Costs reflect ingredient amounts used, not the cost of buying every full package, and vary by store and location. See [ESTIMATES.md](ESTIMATES.md) for calculation assumptions and sources.
+There are no built-in recipes. The website intentionally has no account system, database, API keys, automatic recipe scraping, or medical personalization.
 
-The 100 budget meals use original instructions, USDA ingredient composition data, and representative grocery references plus explicit budget assumptions. They use illustrative meal artwork rather than dish photography. Their calculations and source details are documented in [BUDGET-MEALS.md](BUDGET-MEALS.md). Meal times start with any listed cooked grains or lentils already prepared. The recipes have not been kitchen-tested; substitutions affect both nutrition and cost.
+## Health information and images
 
-When adding or editing a personal recipe, expand **Macros & meal cost** to enter all four macro values per serving and/or the total recipe cost. These fields are optional; unknown values stay unavailable rather than showing zero. Personal values are entered manually, not calculated automatically from ingredient text, and are preserved in library backups.
+Health guides provide general adult educational information with primary sources and review dates. They are not personalized medical advice. Revisit source guidance when updating them.
 
-Health guides are general adult educational information, with primary sources and review dates. They are not personalized medical advice. Revisit source guidance when updating the collection.
-
-Fonts load from Google Fonts, with local system fallbacks. All food photos are included in the repository, so they do not depend on a remote image service.
+The home-page image and fallback photos for older backups are representative serving inspiration, not recipe content. Credits are in [assets/CREDITS.md](assets/CREDITS.md). These images are included in the repository. Fonts load from Google Fonts with system fallbacks.
 
 ## Project structure
 
 - `index.html` — page shell and library dialog
 - `styles.css` — responsive design
 - `app.js` — browsing, dialogs, research, and editing
-- `content.js` — starter recipes and guides
-- `estimates.js` — nutrition and cost estimates for the starter recipes
-- `budget-meals.js` — builds the 100-recipe collection and calculates its estimates
-- `data/meal-plans.js` — original recipes and ingredient grams per serving
-- `data/ingredients.js` — USDA nutrients and documented ingredient price assumptions
-- `storage.js` — validated portable library format and merge rules
-- `assets/` — photos and brand icon
+- `content.js` — health guides; the shared recipe list is intentionally empty
+- `recipe-search.js` — filters, serving metrics, sorting, and URL state
+- `photo-utils.js` — photo validation
+- `data/seed-photos.js` — home/fallback image attribution
+- `storage.js` — portable library validation and merge rules
+- `assets/` — home/fallback photos and brand icon
 - `scripts/` — dependency-free build and local preview
-- `tests/` — backup validation, merge behavior, and content integrity
+- `tests/` — library safety, photo validation, filters, and content checks
 
-User input is rendered as text, source links allow only HTTP/HTTPS, and imports validate and strip unsupported fields before saving. Builds include only the explicit website files, not local files or secrets.
+User input is rendered as text. Source links allow HTTP/HTTPS; image links require HTTPS. Imports validate supported fields before saving. Builds include only explicit website files, not local files or secrets.
