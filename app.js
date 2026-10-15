@@ -1,4 +1,4 @@
-import { articles } from './content.js';
+import { recipes, articles } from './content.js';
 import { seedPhotos } from './data/seed-photos.js';
 import { validatePhoto, safePhotoSource, MAX_PHOTO_LENGTH } from './photo-utils.js';
 import { normalizeFilters, filterCount, filterErrors, recipeMetrics, matchesRecipeFilters, sortRecipes, sortOptions, filtersFromParams, addFiltersToParams } from './recipe-search.js';
@@ -42,7 +42,7 @@ let estimateBasis = 'serving';
 let expandedEstimates = new Set();
 let toastTimeout;
 const budgetCriteria = { minProtein: 25, maxCost: 4 };
-const allRecipes = () => library.entries.filter(item => item.type === 'recipe');
+const allRecipes = () => [...recipes.map(item => ({ ...item, type: 'recipe' })), ...library.entries.filter(item => item.type === 'recipe')];
 const allArticles = () => [...articles.map(x => ({ ...x, type: 'article' })), ...library.entries.filter(x => x.type === 'article')];
 const allItems = () => [...allRecipes(), ...allArticles()];
 const saved = id => library.saved.includes(id);

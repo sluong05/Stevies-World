@@ -1,6 +1,6 @@
 # Photo credits
 
-Food photographs downloaded from Unsplash for use in Stevies World. These are representative food photographs; dishes shown may differ from the accompanying recipe. All files are progressive JPEGs, requested at quality 85 with a maximum dimension of 1100 pixels.
+Food photographs downloaded from Unsplash for use in Stevies World. These are representative food photographs; dishes shown may differ from the accompanying recipe. These six Unsplash files are progressive JPEGs, requested at quality 85 with a maximum dimension of 1100 pixels.
 
 | File | Photographer | Original photo | Download source |
 | --- | --- | --- | --- |
@@ -13,4 +13,11 @@ Food photographs downloaded from Unsplash for use in Stevies World. These are re
 
 The current photo pages identify the images as free to use under the [Unsplash License](https://unsplash.com/license). Cala's October 2016 photo was originally released under CC0, as recorded by [Wikimedia Commons](https://commons.wikimedia.org/wiki/File:Autumn_Soup_(Unsplash).jpg).
 
-The photographs support the home page and representative fallbacks for older personal recipe backups. There are no built-in recipes.
+The photographs support the home page and representative fallbacks for older personal recipe backups. The shared cookbook contains only the two recipes supplied by the site owner.
+
+## Your cookbook recipes
+
+- `japanese-curry.jpg`: **Vegetable curry rice**, by **pelican** from Tokyo, Japan. [Original on Wikimedia Commons](https://commons.wikimedia.org/wiki/File:Vegetable_curry_rice_(14974664885).jpg), [original Flickr source](https://www.flickr.com/photos/pelican/14974664885/), [CC BY-SA 2.0](https://creativecommons.org/licenses/by-sa/2.0/). Downloaded as a 960-pixel thumbnail; displayed cropped to fit. Serving inspiration only; the pictured rice and vegetables may differ from the recipe. The photograph retains its individual license.
+- `beef-udon.png`: AI-assisted adaptation of the food photograph in the site owner's cookbook screenshot supplied October 15, 2026. Prepared with the built-in image tool. Optional eggs and garnish pictured are excluded from the base recipe estimates.
+
+Image edit prompt: Extract only the lower-right beef udon photograph from the supplied cookbook screenshot, excluding all handwriting and application UI. Preserve the white bowl, noodles, beef, egg halves, scallions, countertop, camera angle and lighting; no added text or objects. The result is labeled as an adaptation because image generation can alter details.
