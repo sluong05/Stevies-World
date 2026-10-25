@@ -112,10 +112,13 @@ export const recipes = [
     category: 'Drinks', minutes: 10, servings: 4,
     tags: ['Your cookbook', 'Thai', 'French press'],
     photo: {
-      src: '/assets/thai-tea-recipe.jpg',
-      alt: 'Your handwritten Thai tea recipe beside a bag of Thai tea mix',
-      author: 'Your cookbook',
-      caption: 'Your original recipe photo and tea mix, rather than a photo of the finished drink.',
+      src: '/assets/thai-tea.jpg',
+      alt: 'A tall glass of orange Thai iced milk tea with ice and a straw',
+      author: 'Jeff Kramer; noise reduction by Takeaway',
+      sourceUrl: 'https://commons.wikimedia.org/wiki/File:Thai_iced_tea.jpg',
+      license: 'CC BY 2.0',
+      licenseUrl: 'https://creativecommons.org/licenses/by/2.0/',
+      caption: 'Serving inspiration: Thai iced milk tea. Photo displayed cropped to fit.',
     },
     ingredients: [
       '½ cup loose Thai tea mix (for brewing, not instant powder)',

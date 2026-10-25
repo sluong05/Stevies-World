@@ -23,4 +23,4 @@ The photographs support the home page and representative fallbacks for older per
 
 Image edit prompt: Extract only the lower-right beef udon photograph from the supplied cookbook screenshot, excluding all handwriting and application UI. Preserve the white bowl, noodles, beef, egg halves, scallions, countertop, camera angle and lighting; no added text or objects. The result is labeled as an adaptation because image generation can alter details.
 
-- `thai-tea-recipe.jpg`: site owner’s supplied photograph of handwritten Thai tea amounts and tea mix, converted from HEIC to JPEG for browser compatibility. This shows the recipe reference, not the finished drink.
+- `thai-tea.jpg`: [“Thai iced tea”](https://commons.wikimedia.org/wiki/File:Thai_iced_tea.jpg) by Jeff Kramer (Flickr: jeffk), with noise reduction by Takeaway, licensed [CC BY 2.0](https://creativecommons.org/licenses/by/2.0/). Downloaded from [Wikimedia Commons](https://upload.wikimedia.org/wikipedia/commons/b/ba/Thai_iced_tea.jpg). Used as serving inspiration; image file unchanged and displayed cropped to fit the website layout.
