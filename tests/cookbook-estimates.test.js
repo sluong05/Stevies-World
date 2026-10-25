@@ -26,7 +26,7 @@ test('udon counts beef sauce and broth seasonings together, with optional eggs e
 });
 
 test('published estimates round only after summing and filters use full-recipe cost divided by servings', () => {
-  for (const recipe of recipes) {
+  for (const recipe of recipes.filter(item => item.nutrition && item.cost)) {
     const calculation = calculateEstimates(recipe.id), plan = estimatePlans[recipe.id];
     assert.equal(recipe.cost.total, Math.round(calculation.totalCost * 100) / 100);
     for (const nutrient of ['protein', 'carbs', 'fat']) assert.ok(Math.abs(recipe.nutrition[nutrient] - calculation.totalNutrition[nutrient] / plan.servings) <= .05);

@@ -13,7 +13,7 @@ Food photographs downloaded from Unsplash for use in Stevies World. These are re
 
 The current photo pages identify the images as free to use under the [Unsplash License](https://unsplash.com/license). Cala's October 2016 photo was originally released under CC0, as recorded by [Wikimedia Commons](https://commons.wikimedia.org/wiki/File:Autumn_Soup_(Unsplash).jpg).
 
-The photographs support the home page and representative fallbacks for older personal recipe backups. The shared cookbook contains only the two recipes supplied by the site owner.
+The photographs support the home page and representative fallbacks for older personal recipe backups. The shared cookbook contains only recipes supplied by the site owner.
 
 ## Your cookbook recipes
 
@@ -22,3 +22,5 @@ The photographs support the home page and representative fallbacks for older per
 - `beef-udon.png`: AI-assisted adaptation of the food photograph in the site owner's cookbook screenshot supplied October 15, 2026. Prepared with the built-in image tool. Optional eggs and garnish pictured are excluded from the base recipe estimates.
 
 Image edit prompt: Extract only the lower-right beef udon photograph from the supplied cookbook screenshot, excluding all handwriting and application UI. Preserve the white bowl, noodles, beef, egg halves, scallions, countertop, camera angle and lighting; no added text or objects. The result is labeled as an adaptation because image generation can alter details.
+
+- `thai-tea-recipe.jpg`: site owner’s supplied photograph of handwritten Thai tea amounts and tea mix, converted from HEIC to JPEG for browser compatibility. This shows the recipe reference, not the finished drink.

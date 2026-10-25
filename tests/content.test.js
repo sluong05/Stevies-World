@@ -5,8 +5,8 @@ import { safeUrl, validateLibrary } from '../storage.js';
 import { readFile } from 'node:fs/promises';
 import { validatePhoto } from '../photo-utils.js';
 
-test('only the two supplied cookbook recipes are included alongside the health guides', () => {
-  assert.deepEqual(recipes.map(item => item.id), ['japanese-curry-for-katsu', 'beef-udon-niku-udon']);
+test('only the supplied cookbook recipes are included alongside the health guides', () => {
+  assert.deepEqual(recipes.map(item => item.id), ['japanese-curry-for-katsu', 'beef-udon-niku-udon', 'thai-tea-french-press']);
   assert.ok(articles.length > 0);
   const ids = [...recipes, ...articles].map(item => item.id);
   assert.equal(new Set(ids).size, ids.length);
@@ -39,7 +39,7 @@ test('all source links have descriptive labels and complete HTTPS URLs', () => {
   }
 });
 
-test('supplied recipes keep complete instructions, sourced estimates and working local photo files', async () => {
+test('supplied recipes keep complete instructions, working local photos and sources for any estimates', async () => {
   for (const item of recipes) {
     assert.ok(item.note.includes('handwritten cookbook'));
     assert.ok(item.ingredients.length && item.steps.length);
@@ -48,6 +48,7 @@ test('supplied recipes keep complete instructions, sourced estimates and working
     const bytes = await readFile(new URL(`..${item.photo.src}`, import.meta.url));
     assert.ok(bytes.length > 1000);
     assert.ok(bytes.subarray(0, 3).equals(Buffer.from([255,216,255])) || bytes.subarray(0, 8).equals(Buffer.from([137,80,78,71,13,10,26,10])));
-    assert.ok(item.nutrition.sources.length && item.cost.sources.length);
+    if (item.nutrition) assert.ok(item.nutrition.sources.length);
+    if (item.cost) assert.ok(item.cost.sources.length);
   }
 });

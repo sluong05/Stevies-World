@@ -104,6 +104,36 @@ export const recipes = [
       { label: 'Walmart · Optional eggs, 12 count price reference', url: 'https://www.walmart.com/c/kp/eggs-12-count-great-value' },
     ],
   },
+
+  {
+    id: 'thai-tea-french-press',
+    title: 'Thai Tea',
+    description: 'Your sweet Thai tea, brewed in a French press with a 5-minute steep. Serve it over ice, with an optional splash of milk.',
+    category: 'Drinks', minutes: 10, servings: 4,
+    tags: ['Your cookbook', 'Thai', 'French press'],
+    photo: {
+      src: '/assets/thai-tea-recipe.jpg',
+      alt: 'Your handwritten Thai tea recipe beside a bag of Thai tea mix',
+      author: 'Your cookbook',
+      caption: 'Your original recipe photo and tea mix, rather than a photo of the finished drink.',
+    },
+    ingredients: [
+      '½ cup loose Thai tea mix (for brewing, not instant powder)',
+      '⅓ cup granulated sugar',
+      '4 cups water, brought to a boil',
+      'Ice, for serving',
+      'Optional: milk, evaporated milk, or a milk alternative, to taste',
+    ],
+    steps: [
+      'Bring 4 cups water to a boil. Put the ½ cup Thai tea mix into a heat-safe French press large enough to hold the water and leaves below its maximum fill line. If it will not fit, brew two equal batches, each with ¼ cup tea and 2 cups water.',
+      'Pour the boiling water over the tea leaves and stir gently to wet them. Set the lid on with the plunger raised. Let the tea sit and steep for 5 full minutes before pressing; do not push the plunger down yet.',
+      'After 5 minutes, slowly lower the French press plunger to separate the leaves from the tea. Pour the brewed tea into a heat-safe pitcher. If any fine tea particles remain, pour it through a fine-mesh strainer as well.',
+      'While the strained tea is still hot, stir in the ⅓ cup sugar until completely dissolved. If brewing two batches, combine them before adding the full amount of sugar.',
+      'Let the tea cool enough to serve over ice, or chill it first. Divide among 4 glasses with ice. Add an optional splash of milk, evaporated milk, or a milk alternative to each glass and stir.',
+    ],
+    note: 'Transcribed from your handwritten cookbook photo: ½ cup Thai tea, ⅓ cup sugar and 4 cups hot water. Your added instruction is to pour in boiling water, steep for 5 minutes, then use the French press. Straining, dissolving the sugar while hot, cooling and serving are inferred steps. Four servings and about 10 minutes of preparation and brewing are assumed; cooling or chilling takes extra time. The finished yield is slightly less than 4 cups before ice because the leaves retain water. Ice and milk are optional serving suggestions, not ingredients in the original notes. No nutrition or cost estimate has been added for this recipe.',
+    sources: [],
+  },
 ];
 
 export const articles = [

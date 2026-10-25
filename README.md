@@ -4,7 +4,7 @@ A personal home for your recipes and healthy living information. Browse, read, r
 
 ## What's included
 
-- Your two handwritten cookbook recipes: Chicken Katsu Curry and Beef Udon (Niku Udon), with researched nutrition and cost estimates.
+- Your handwritten cookbook recipes: Chicken Katsu Curry, Beef Udon (Niku Udon), and Thai Tea. The two meals include researched nutrition and cost estimates; Thai Tea preserves your supplied amounts without estimates.
 - Five source-linked guides covering nutrition, sleep, movement, hydration, and food safety.
 - Recipe photos, ingredients, instructions, timing, servings, source links, tags, and notes.
 - Optional macros and meal costs, with per-serving and whole-recipe views.
@@ -56,13 +56,13 @@ Personal additions and bookmarks are saved in **localStorage in the current brow
 
 If saved browser data cannot be read, the app pauses writes to protect the original. Export preserves the original payload for recovery. Importing a valid backup can restore the collection; the previous raw data is also preserved under the `stevies-world.library.v1.recovery` browser-storage key.
 
-Only the two recipes you supplied are included in the shared cookbook. The previous starter catalog remains removed. See [recipe estimate calculations](RECIPE-ESTIMATES.md) for portion assumptions, ingredient quantities, source links, and pricing references. The website intentionally has no account system, database, API keys, automatic recipe scraping, or medical personalization.
+Only the recipes you supplied are included in the shared cookbook. The previous starter catalog remains removed. See [recipe estimate calculations](RECIPE-ESTIMATES.md) for portion assumptions, ingredient quantities, source links, and pricing references. The website intentionally has no account system, database, API keys, automatic recipe scraping, or medical personalization.
 
 ## Health information and images
 
 Health guides provide general adult educational information with primary sources and review dates. They are not personalized medical advice. Revisit source guidance when updating them.
 
-The chicken katsu curry photo was supplied by you. Rice is included in its recipe estimates; the extra egg topping pictured is excluded. The beef udon image is an AI-assisted adaptation of the food photo in your supplied cookbook screenshot; its optional toppings are not included in the base estimates. The home-page image and fallback photos for older backups are representative serving inspiration. Credits are in [assets/CREDITS.md](assets/CREDITS.md). These images are included in the repository. Fonts load from Google Fonts with system fallbacks.
+The Thai Tea photo shows your original handwritten recipe and tea mix; its French press method includes a 5-minute steep before pressing. Drinks is available as a recipe category and filter. The chicken katsu curry photo was supplied by you. Rice is included in its recipe estimates; the extra egg topping pictured is excluded. The beef udon image is an AI-assisted adaptation of the food photo in your supplied cookbook screenshot; its optional toppings are not included in the base estimates. The home-page image and fallback photos for older backups are representative serving inspiration. Credits are in [assets/CREDITS.md](assets/CREDITS.md). These images are included in the repository. Fonts load from Google Fonts with system fallbacks.
 
 ## Project structure
 
