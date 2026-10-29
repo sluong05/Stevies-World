@@ -1,8 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { ingredientReferences, estimatePlans, calculateEstimates } from '../data/recipe-estimates.js';
-import { recipes } from '../content.js';
-import { recipeMetrics } from '../recipe-search.js';
+import { recipes } from '../data/cookbook.js';
 
 test('the combined katsu curry includes chicken, coating, absorbed oil and the requested rice', () => {
   assert.deepEqual(ingredientReferences.curry.nutrition, { calories: 450, protein: 5, carbs: 45, fat: 25 });
@@ -25,12 +24,10 @@ test('udon counts beef sauce and broth seasonings together, with optional eggs e
   assert.deepEqual(calculateEstimates('beef-udon-niku-udon').nutrition, { calories: 630, protein: 32.6, carbs: 89.9, fat: 13.1 });
 });
 
-test('published estimates round only after summing and filters use full-recipe cost divided by servings', () => {
+test('published estimates round only after summing for whole-recipe cost', () => {
   for (const recipe of recipes.filter(item => item.nutrition && item.cost)) {
     const calculation = calculateEstimates(recipe.id), plan = estimatePlans[recipe.id];
     assert.equal(recipe.cost.total, Math.round(calculation.totalCost * 100) / 100);
     for (const nutrient of ['protein', 'carbs', 'fat']) assert.ok(Math.abs(recipe.nutrition[nutrient] - calculation.totalNutrition[nutrient] / plan.servings) <= .05);
-    assert.equal(recipeMetrics(recipe).price, recipe.cost.total / recipe.servings);
-    assert.equal(recipeMetrics(recipe).density, recipe.nutrition.protein / recipe.nutrition.calories * 100);
   }
 });

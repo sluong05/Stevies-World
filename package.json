@@ -1,9 +1,9 @@
 {
   "name": "stevies-world",
-  "version": "1.0.0",
+  "version": "2.0.0",
   "private": true,
   "type": "module",
-  "description": "A personal home for good food and healthy living knowledge.",
+  "description": "My recipes, workouts and notes, ready on my phone.",
   "scripts": {
     "dev": "node scripts/serve.mjs",
     "build": "node scripts/build.mjs",

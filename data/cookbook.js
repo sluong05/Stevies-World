@@ -1,4 +1,4 @@
-import { researchedEstimates } from './data/recipe-estimates.js';
+import { researchedEstimates } from './recipe-estimates.js';
 
 // General adult health information.
 // Source links were checked on October 13, 2026.

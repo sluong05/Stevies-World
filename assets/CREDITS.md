@@ -13,14 +13,19 @@ Food photographs downloaded from Unsplash for use in Stevies World. These are re
 
 The current photo pages identify the images as free to use under the [Unsplash License](https://unsplash.com/license). Cala's October 2016 photo was originally released under CC0, as recorded by [Wikimedia Commons](https://commons.wikimedia.org/wiki/File:Autumn_Soup_(Unsplash).jpg).
 
-The photographs support the home page and representative fallbacks for older personal recipe backups. The shared cookbook contains only recipes supplied by the site owner.
+These six Unsplash photographs were removed in the redesign. The shared cookbook contains only recipes supplied by the site owner.
 
 ## Your cookbook recipes
 
 - `chicken-katsu-curry.jpg`: photograph supplied by the site owner on October 15, 2026, used directly without image alteration. Displayed cropped to fit the website layout. The rice is included in the recipe estimates; the extra egg topping shown is optional and excluded.
 
-- `beef-udon.png`: AI-assisted adaptation of the food photograph in the site owner's cookbook screenshot supplied October 15, 2026. Prepared with the built-in image tool. Optional eggs and garnish pictured are excluded from the base recipe estimates.
+- `beef-udon.jpg` (a resized copy of `beef-udon.png` for faster loading): AI-assisted adaptation of the food photograph in the site owner's cookbook screenshot supplied October 15, 2026. Prepared with the built-in image tool. Optional eggs and garnish pictured are excluded from the base recipe estimates.
 
 Image edit prompt: Extract only the lower-right beef udon photograph from the supplied cookbook screenshot, excluding all handwriting and application UI. Preserve the white bowl, noodles, beef, egg halves, scallions, countertop, camera angle and lighting; no added text or objects. The result is labeled as an adaptation because image generation can alter details.
 
 - `thai-tea.jpg`: [“Thai iced tea”](https://commons.wikimedia.org/wiki/File:Thai_iced_tea.jpg) by Jeff Kramer (Flickr: jeffk), with noise reduction by Takeaway, licensed [CC BY 2.0](https://creativecommons.org/licenses/by/2.0/). Downloaded from [Wikimedia Commons](https://upload.wikimedia.org/wikipedia/commons/b/ba/Thai_iced_tea.jpg). Used as serving inspiration; image file unchanged and displayed cropped to fit the website layout.
+
+
+## App icon and scenery
+
+`icon.svg`, its PNG sizes and the painted landscape on the home screen are original artwork drawn in code for this site.

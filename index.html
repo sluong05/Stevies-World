@@ -1,35 +1,53 @@
 <!doctype html>
-<html lang="en">
+<html lang="en" data-theme="meadow">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <meta name="theme-color" content="#f8f9f5" />
-  <meta name="description" content="Stevies World: a little corner of the internet for good recipes, useful health knowledge, and everyday curiosity." />
-  <title>Stevies World — Good food. Feel-good living.</title>
-  <link rel="icon" type="image/svg+xml" href="/assets/favicon.svg" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="theme-color" content="#f3f1df" />
+  <meta name="description" content="Stevies World: my recipes, workouts and notes, ready on my phone." />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+  <meta name="apple-mobile-web-app-title" content="Stevies World" />
+  <title>Stevies World</title>
+  <link rel="manifest" href="/manifest.webmanifest" />
+  <link rel="icon" type="image/svg+xml" href="/assets/icon.svg" />
+  <link rel="apple-touch-icon" href="/assets/icon-180.png" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;450;500;550;600;650;700&family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,650&display=swap" rel="stylesheet" />
+  <script>
+    // Apply the saved theme before first paint so there's no flash.
+    try {
+      var t = localStorage.getItem('sw.theme') || 'meadow';
+      if (t === 'meadow' && localStorage.getItem('sw.autoNight') !== '0' && matchMedia('(prefers-color-scheme: dark)').matches) t = 'night';
+      document.documentElement.dataset.theme = t;
+    } catch (e) {}
+  </script>
   <link rel="stylesheet" href="/styles.css" />
-  <script type="module" src="/app.js"></script>
+  <script type="module" src="/src/app.js"></script>
 </head>
 <body>
   <a class="skip-link" href="#main">Skip to content</a>
-  <header class="site-header">
-    <a class="brand" href="/" aria-label="Stevies World home"><img src="/assets/favicon.svg" width="40" height="40" alt="" /><span>stevies world<span class="brand-dot">.</span></span></a>
-    <nav aria-label="Main navigation">
-      <a href="?view=home" data-nav="home">Discover</a>
-      <a href="?view=recipes" data-nav="recipes">Recipes</a>
-      <a href="?view=health" data-nav="health">Healthy living</a>
+  <header class="topbar">
+    <a class="brand" href="#/" aria-label="Stevies World home"><img src="/assets/icon.svg" width="30" height="30" alt="" /><span>stevies world</span></a>
+    <nav class="desk-nav" aria-label="Sections">
+      <a href="#/" data-tab="home">Home</a>
+      <a href="#/recipes" data-tab="recipes">Recipes</a>
+      <a href="#/workouts" data-tab="workouts">Workouts</a>
+      <a href="#/notes" data-tab="notes">Notes</a>
+      <a class="desk-add" href="#/add" data-tab="add">Add</a>
     </nav>
-    <div class="header-actions"><button class="icon-button" data-action="collection" aria-label="My collection" title="My collection"><svg viewBox="0 0 24 24"><path d="M6 4h12v17l-6-4-6 4z"/></svg></button><button class="button button-dark button-small" data-action="add" aria-label="Add a find"><span aria-hidden="true">+</span><span class="add-label">Add a find</span></button></div>
+    <a class="round-btn settings-btn" href="#/settings" data-tab="settings" aria-label="Settings"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="12" cy="12" r="3"/><path d="M12 2.5v3M12 18.5v3M2.5 12h3M18.5 12h3M5.3 5.3l2.1 2.1M16.6 16.6l2.1 2.1M5.3 18.7l2.1-2.1M16.6 7.4l2.1-2.1"/></svg></a>
   </header>
   <main id="main" tabindex="-1"></main>
-  <footer class="site-footer"><a class="footer-brand" href="/">stevies world.</a><p>A space to be curious. A little more informed, every day.</p><button class="text-button" data-action="library">Your library & backups</button></footer>
-  <dialog id="detail-dialog" aria-labelledby="detail-title"><div id="detail-content"></div></dialog>
-  <dialog id="edit-dialog" aria-labelledby="edit-title"><div id="edit-content"></div></dialog>
-  <dialog id="library-dialog" aria-labelledby="library-title"><div class="dialog-body"><button class="dialog-close icon-button" data-close aria-label="Close">×</button><span class="small-tag">Made personal</span><h2 id="library-title">Your little library.</h2><p>Recipes and notes you add, plus your saved favorites, stay in this browser on this device. They are not synced to GitHub or other devices.</p><p>Export a backup to keep a copy, or import one to bring your collection to another browser. Importing merges it with your existing collection.</p><div class="library-actions"><button class="button button-dark" data-action="export">Export my library</button><button class="button button-outline" data-action="import">Import a backup</button><input type="file" id="import-file" accept="application/json,.json" hidden /></div><p class="fine-print">Your cookbook recipes and health guides are included with the website. Additional recipes and notes you add stay in this browser. Your own additions are labeled “Your find.” Health guides provide general information for adults, not personal medical advice.</p></div></dialog>
+  <nav class="tabbar" aria-label="Sections">
+    <a href="#/" data-tab="home"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 11.5 12 4l9 7.5"/><path d="M5.5 9.5V20h13V9.5"/><path d="M10 20v-5.5h4V20"/></svg><span>Home</span></a>
+    <a href="#/recipes" data-tab="recipes"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 11h18a9 9 0 0 1-18 0Z"/><path d="M8 7c0-1.5 1-2 1-3.5M12 7c0-1.5 1-2 1-3.5M16 7c0-1.5 1-2 1-3.5"/></svg><span>Recipes</span></a>
+    <a href="#/add" data-tab="add" class="tab-add" aria-label="Add"><span class="add-disc"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg></span></a>
+    <a href="#/workouts" data-tab="workouts"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M6.5 6.5v11M17.5 6.5v11M3.5 9v6M20.5 9v6M6.5 12h11"/></svg><span>Workouts</span></a>
+    <a href="#/notes" data-tab="notes"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 19c0-8 5-13 15-14-1 10-6 15-14 15"/><path d="M5 19 13 11"/></svg><span>Notes</span></a>
+  </nav>
   <div id="toast" class="toast" role="status" aria-live="polite"></div>
-  <noscript><p class="noscript">Please enable JavaScript to browse recipes and health guides.</p></noscript>
+  <noscript><p class="empty-line">Stevies World needs JavaScript turned on.</p></noscript>
 </body>
 </html>

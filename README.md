@@ -1,82 +1,80 @@
 # Stevies World
 
-A personal home for your recipes and healthy living information. Browse, read, research, and keep useful finds. No goals, streaks, habit tracking, or completion checklists.
+My recipes, workouts and notes in one place, built to open fast on my phone.
 
-## What's included
+- **Recipes**: your cookbook recipes (Chicken Katsu Curry, Beef Udon, Thai Tea) plus anything you add. Cook mode shows one step at a time in big text and keeps the screen awake.
+- **Workouts**: saved routines with sections, sets, reps and rest. Start workout goes one exercise at a time and has a rest timer.
+- **Notes**: anything else, like sizes, gear, routines or links. The five healthy-living guides live here.
+- **Paste a link**: paste a TikTok, Instagram, YouTube or recipe-site link (or just the caption text) and it fills in the recipe or workout for you to check and save.
+- **Pick one**: picks a random meal or workout for you, from your favorites when you have some.
+- **Themes**: Meadow (painted hills, with a sky that follows the time of day), Firefly night, Retro desktop and Plain paper. Change it in Settings.
+- **Sync**: with a passcode, your library is the same on your phone and laptop. It also works offline and catches up later.
 
-- Your handwritten cookbook recipes: Chicken Katsu Curry, Beef Udon (Niku Udon), and Thai Tea. The two meals include researched nutrition and cost estimates; Thai Tea preserves your supplied amounts without estimates.
-- Five source-linked guides covering nutrition, sleep, movement, hydration, and food safety.
-- Recipe photos, ingredients, instructions, timing, servings, source links, tags, and notes.
-- Optional macros and meal costs, with per-serving and whole-recipe views.
-- Combined filters for price, protein, calories, protein per 100 calories, and cooking time, plus sorting and category filters.
-- Bookmarks, a research box that opens Google, and JSON library exports/imports.
-- Responsive layouts, keyboard navigation, accessible dialogs, and reduced-motion support.
+## How link import works (no AI)
+
+| Link | What's read |
+| --- | --- |
+| Recipe websites | The recipe card most sites publish for Google (schema.org). This gives exact ingredients, steps, time, servings and macros. |
+| TikTok | The video caption, via TikTok's public embed info. |
+| Instagram | The post caption from the page's preview info. Instagram sometimes hides it. When that happens the app asks you to paste the caption, and the link is still saved. |
+| YouTube | The video description. |
+| Anything else | The page text, read with the same pattern matching. |
+
+Captions are sorted using patterns that real posts follow: "Ingredients:" and "Steps:" headings, quantity lines like "200g chicken", numbered steps, "3x10", "4 sets of 8", "rest 90s", "450 cals, 45g protein", and hashtags as tags. You always see the result before saving and can fix anything. If a post only says "recipe in bio", there's nothing to read, so write it in yourself.
+
+## Set up sync (once, about 5 minutes)
+
+Without this, everything you add stays only on the device you added it on.
+
+1. In the [Vercel dashboard](https://vercel.com/dashboard), open the **Stevies-World** project, then **Storage**, then **Create database**. Choose **Upstash for Redis** (the free plan is plenty) and connect it to this project. This adds the `KV_REST_API_URL` and `KV_REST_API_TOKEN` environment variables for you.
+2. In **Settings**, then **Environment Variables**, add `STEVIE_PASSCODE` with a passphrase only you know.
+3. Redeploy: push a commit, or click **Redeploy** on the latest deployment.
+4. On each device, open the site, go to **Settings**, then **Sync**, and enter the passcode.
+
+The passcode protects reading and changing your library and using the link importer. Photos are served from long random links, so they can't be guessed.
+
+## On your phone
+
+- **Home screen**: in Safari, tap Share, then **Add to Home Screen**. It opens full-screen like an app.
+- **Share straight from TikTok or Instagram on iPhone**: Settings in the app has a 4-step Shortcut recipe. It sends a shared link to `https://<your-site>/?add=<link>`.
+- **Android**: once it's installed, Stevies World appears in the share menu.
 
 ## Run locally
 
-Requires Node.js 20 or newer. There are no runtime or build dependencies to install.
+Requires Node.js 20 or newer. There's nothing to install.
 
 ```sh
-npm run dev
-```
-
-Open http://127.0.0.1:4173. To build and preview the deployable output:
-
-```sh
+npm run dev                                      # http://127.0.0.1:4173 (no sync)
+SW_DEV_MEMORY=1 STEVIE_PASSCODE=test npm run dev # try sync with a throwaway in-memory store
 npm test
-npm run build
-npm run preview
+npm run build && npm run preview
 ```
 
-Stop the development server before starting the preview server, since both use port 4173. Set `PORT` to choose another port.
+Link import needs internet access from your machine. Add `KV_REST_API_URL` and `KV_REST_API_TOKEN` to your shell to test against the real database.
 
 ## Deploy on Vercel
 
-Import `sluong05/Stevies-World`. The included `vercel.json` configures:
-
-| Setting | Value |
-| --- | --- |
-| Framework | Other |
-| Build command | `npm run build` |
-| Output directory | `dist` |
-| Root directory | Repository root |
-| Environment variables | None required |
-
-Vercel can redeploy when new commits reach the connected branch. See [Vercel's build configuration documentation](https://vercel.com/docs/builds/configure-a-build).
-
-## Your recipes and library
-
-Choose **Add a find** or **Add your first recipe**. Recipes require a title, description, category, timing, servings, ingredients, instructions, and a photo. Upload a JPEG, PNG, or WebP up to 15 MB (compressed locally before saving), or paste a working direct HTTPS image link. Photo descriptions and source credits are optional. New and edited recipes cannot be saved without a working photo.
-
-Expand **Macros & meal cost** to enter all four macro values for one serving and/or the cost of ingredients used in the whole recipe. These fields are optional and entered manually, not calculated from ingredient text. Unknown values stay unavailable instead of showing zero. Costs are in USD and exclude the extra cost of buying full packages. Open **Macros** or **Estimated cost** in a recipe to view per-serving or whole-recipe values.
-
-Use **More filters** to combine minimum/maximum price, protein, calories, protein per 100 kcal, and maximum cooking time. All amounts are per serving. Protein density is protein ÷ calories × 100. A recipe with an unknown estimate is excluded only when filtering that estimate; sorting places unknown values last. Search and filters are preserved in the page URL.
-
-Personal additions and bookmarks are saved in **localStorage in the current browser**. They do not sync between devices or write back to GitHub. Clearing website data removes them. Export from **Your library & backups** to keep a copy, then import it on another device. Uploaded photos are included in the backup; external image links depend on their host. Imports merge entries by ID without removing other entries. Older backups without photos remain compatible and display representative serving inspiration until edited.
-
-If saved browser data cannot be read, the app pauses writes to protect the original. Export preserves the original payload for recovery. Importing a valid backup can restore the collection; the previous raw data is also preserved under the `stevies-world.library.v1.recovery` browser-storage key.
-
-Only the recipes you supplied are included in the shared cookbook. The previous starter catalog remains removed. See [recipe estimate calculations](RECIPE-ESTIMATES.md) for portion assumptions, ingredient quantities, source links, and pricing references. The website intentionally has no account system, database, API keys, automatic recipe scraping, or medical personalization.
-
-## Health information and images
-
-Health guides provide general adult educational information with primary sources and review dates. They are not personalized medical advice. Revisit source guidance when updating them.
-
-The Thai Tea photo shows a finished glass of Thai iced milk tea, credited to Jeff Kramer under CC BY 2.0 (noise reduction by Takeaway). Its French press method includes a 5-minute steep before pressing. Drinks is available as a recipe category and filter. The chicken katsu curry photo was supplied by you. Rice is included in its recipe estimates; the extra egg topping pictured is excluded. The beef udon image is an AI-assisted adaptation of the food photo in your supplied cookbook screenshot; its optional toppings are not included in the base estimates. The home-page image and fallback photos for older backups are representative serving inspiration. Credits are in [assets/CREDITS.md](assets/CREDITS.md). These images are included in the repository. Fonts load from Google Fonts with system fallbacks.
+`vercel.json` sets the build (`npm run build`) and output folder (`dist`). Files in `api/` become serverless functions automatically. Pushing to the connected branch redeploys.
 
 ## Project structure
 
-- `index.html` — page shell and library dialog
-- `styles.css` — responsive design
-- `app.js` — browsing, dialogs, research, and editing
-- `content.js` — your supplied recipes and the health guides
-- `recipe-search.js` — filters, serving metrics, sorting, and URL state
-- `photo-utils.js` — photo validation
-- `data/seed-photos.js` — home/fallback image attribution
-- `data/recipe-estimates.js` — ingredient references and recipe calculations
-- `storage.js` — portable library validation and merge rules
-- `assets/` — home/fallback photos and brand icon
-- `scripts/` — dependency-free build and local preview
-- `tests/` — library safety, photo validation, filters, and content checks
+- `index.html`, `styles.css`: page shell, plus all four themes as CSS custom properties
+- `src/app.js`: routing (`#/recipes`, `#/item/<id>`, `#/add`…) and event handling
+- `src/views.js`: home, list pages, item pages
+- `src/editor.js`: paste or import flow, and the editor
+- `src/modes.js`: cook mode and workout mode
+- `src/settings.js`, `src/theme.js`: settings page and theme switching
+- `src/store.js`: library on the device (IndexedDB), offline queue and sync
+- `src/scenery.js`: the painted landscape (original SVG)
+- `src/builtins.js`, `data/cookbook.js`, `data/recipe-estimates.js`: your cookbook and guides
+- `shared/parse.js`: caption to recipe or workout patterns, used by the app and the API
+- `shared/extract.js`: recipe-card and metadata reading for web pages
+- `shared/schema.js`: the one item shape everything is checked against
+- `api/library.js`, `api/photo.js`, `api/import.js`: sync, photos and link import
+- `lib/`: Upstash REST client, passcode check, safe fetching (blocks private addresses) and importers
+- `sw.js`, `manifest.webmanifest`: installable app and offline cache
+- `tests/`: parser, extraction, storage and API tests
 
-User input is rendered as text. Source links allow HTTP/HTTPS; image links require HTTPS. Imports validate supported fields before saving. Builds include only explicit website files, not local files or secrets.
+Older backups from the previous version can be loaded from **Settings**, then **Backups**. Anything saved in this browser by the old version is brought over automatically the first time the new version opens.
+
+Recipe estimate details: [RECIPE-ESTIMATES.md](RECIPE-ESTIMATES.md). Photo credits: [assets/CREDITS.md](assets/CREDITS.md). The healthy-living notes are general information for adults, not personal medical advice.
