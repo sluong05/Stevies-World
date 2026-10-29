@@ -102,3 +102,14 @@ test('small helpers', () => {
   assert.equal(cleanTitle('EASY HIGH PROTEIN PASTA (comment PASTA for the recipe)'), 'Easy High Protein Pasta');
   assert.equal(cleanTitle('Upper body workout - follow for more'), 'Upper body workout');
 });
+
+test('cost in captions becomes a whole-recipe cost', async () => {
+  const { parseCost } = await import('../shared/parse.js');
+  assert.equal(parseCost('Only $2.50 per serving!', 4), 10);
+  assert.equal(parseCost('$3/serving', null), 3);
+  assert.equal(parseCost('Feeds 4 for just $12'), 12);
+  assert.equal(parseCost('Total cost: $8.75'), 8.75);
+  assert.equal(parseCost('no prices here'), null);
+  const d = parseText('Cheap chili\nServes 4, about $2 per serving\nIngredients:\n1 lb beef\n1 can beans\nBrown the beef then simmer with the beans for 20 minutes.');
+  assert.deepEqual(d.cost, { total: 8, currency: 'USD' });
+});

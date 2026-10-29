@@ -168,6 +168,17 @@ export function parseServings(text = '') {
   return m ? Number(m[1]) : null;
 }
 
+/** "$2.50 per serving" (× servings) or "costs $12" → whole-recipe cost in dollars. */
+export function parseCost(text = '', servings = null) {
+  const t = String(text);
+  const per = t.match(/\$\s?(\d{1,4}(?:\.\d{1,2})?)\s*(?:\/|per|a|each)\s*(?:serving|portion|meal|bowl|plate|person)\b/i)
+    || t.match(/\b(?:per|each)\s*(?:serving|portion|meal|bowl|plate|person)\s*[:=-]?\s*(?:is|of|for|only|about|~)?\s*\$\s?(\d{1,4}(?:\.\d{1,2})?)/i);
+  if (per) return Math.round(Number(per[1]) * (servings || 1) * 100) / 100;
+  const total = t.match(/\b(?:costs?|total(?: cost)?|for (?:only|just|under)?|only|under|budget|spent)\s*:?\s*(?:about|around|~)?\s*\$\s?(\d{1,4}(?:\.\d{1,2})?)/i)
+    || t.match(/\$\s?(\d{1,4}(?:\.\d{1,2})?)\s*(?:total|in total|for (?:the )?(?:whole|entire|all))\b/i);
+  return total ? Number(total[1]) : null;
+}
+
 export function parseNutrition(text = '') {
   const t = String(text);
   const grab = (names) => {
@@ -333,6 +344,8 @@ export function parseText(text = '', hints = {}) {
   draft.minutes = parseMinutes(normalized) ?? parseMinutes(`${draft.title}\n${lines.slice(0, 2).join('\n')}\n${draft.note}`, { loose: true });
   draft.servings = parseServings(normalized);
   draft.nutrition = parseNutrition(normalized);
+  const total = parseCost(normalized, draft.servings);
+  draft.cost = total === null ? null : { total, currency: 'USD' };
   draft.category = guessCategory(`${draft.title} ${normalized}`);
   return draft;
 }

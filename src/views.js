@@ -8,6 +8,8 @@ export const ui = { query: '', filters: { recipes: 'All', workouts: 'All', notes
 
 const newest = (a, b) => (b.updatedAt || 0) - (a.updatedAt || 0);
 const protein = i => i.nutrition?.protein ?? null;
+export const costPerServing = i => (Number.isFinite(i.cost?.total) ? i.cost.total / (i.servings || 1) : null);
+const money = n => `$${n.toFixed(2)}`;
 
 // ---------- small pieces ----------
 const photoEl = (item, cls = '') => item.photo?.src
@@ -23,6 +25,7 @@ const metaBits = item => {
   const bits = [];
   if (item.minutes) bits.push(`${icon('clock')}${formatMinutes(item.minutes)}`);
   if (item.type === 'recipe' && protein(item) !== null) bits.push(`${icon('flame')}${Math.round(protein(item))} g protein`);
+  if (item.type === 'recipe' && costPerServing(item) !== null) bits.push(`${icon('tag')}${money(costPerServing(item))} a serving`);
   if (item.type === 'workout') bits.push(`${icon('list')}${plural(exerciseCount(item), 'exercise')}`);
   return bits.map(b => `<span>${b}</span>`).join('');
 };
@@ -120,11 +123,12 @@ export function listView(type) {
   if (quick === 'short') items = items.filter(i => i.minutes && i.minutes <= 30);
   if (quick === 'noequip') items = items.filter(i => !i.equipment || /bodyweight/i.test(i.equipment));
   const sort = ui.sort[key] || 'new';
-  items.sort(sort === 'quick' ? (a, b) => (a.minutes || 9999) - (b.minutes || 9999) : sort === 'protein' ? (a, b) => (protein(b) ?? -1) - (protein(a) ?? -1) : sort === 'az' ? (a, b) => a.title.localeCompare(b.title) : newest);
+  const byCost = (a, b) => (costPerServing(a) ?? Infinity) - (costPerServing(b) ?? Infinity) || a.title.localeCompare(b.title);
+  items.sort(sort === 'cost' ? byCost : sort === 'quick' ? (a, b) => (a.minutes || 9999) - (b.minutes || 9999) : sort === 'protein' ? (a, b) => (protein(b) ?? -1) - (protein(a) ?? -1) : sort === 'az' ? (a, b) => a.title.localeCompare(b.title) : newest);
   const quickChips = type === 'recipe'
     ? [['fast', '30 min or less'], ['protein', '30 g+ protein']]
     : type === 'workout' ? [['short', '30 min or less'], ['noequip', 'No equipment']] : [];
-  const sorts = type === 'recipe' ? [['new', 'Newest'], ['quick', 'Quickest'], ['protein', 'Most protein'], ['az', 'A to Z']] : [['new', 'Newest'], ['az', 'A to Z'], ...(type === 'workout' ? [['quick', 'Shortest']] : [])];
+  const sorts = type === 'recipe' ? [['new', 'Newest'], ['quick', 'Quickest'], ['protein', 'Most protein'], ['cost', 'Lowest cost'], ['az', 'A to Z']] : [['new', 'Newest'], ['az', 'A to Z'], ...(type === 'workout' ? [['quick', 'Shortest']] : [])];
   return `<section class="page-head">
       <h1>${sec.name}</h1>
       <div class="page-actions">
@@ -153,7 +157,7 @@ function nutritionBlock(item) {
   const stat = (v, unit, label) => (v === null || v === undefined ? '' : `<div class="stat"><strong>${Math.round(v)}<small>${unit}</small></strong><span>${label}</span></div>`);
   return `<section class="block"><h2>Per serving</h2>
     <div class="stats">${n ? stat(n.calories, '', 'calories') + stat(n.protein, 'g', 'protein') + stat(n.carbs, 'g', 'carbs') + stat(n.fat, 'g', 'fat') : ''}
-    ${item.cost ? `<div class="stat"><strong>$${(item.cost.total / servings).toFixed(2)}</strong><span>cost</span></div>` : ''}</div>
+    ${item.cost ? `<div class="stat"><strong>$${(item.cost.total / servings).toFixed(2)}</strong><span>cost</span></div><div class="stat"><strong>$${item.cost.total.toFixed(2)}</strong><span>whole recipe</span></div>` : ''}</div>
     ${n?.note || item.cost?.note ? `<details class="fine"><summary>How these were estimated</summary>${n?.note ? `<p>${escape(n.note)}</p>` : ''}${item.cost?.note ? `<p>${escape(item.cost.note)}</p>` : ''}${[...(n?.sources || []), ...(item.cost?.sources || [])].length ? `<ul class="sources">${[...(n?.sources || []), ...(item.cost?.sources || [])].map(s => `<li><a href="${escape(s.url)}" target="_blank" rel="noopener noreferrer">${escape(s.label)}</a></li>`).join('')}</ul>` : ''}</details>` : ''}
   </section>`;
 }

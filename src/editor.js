@@ -11,7 +11,7 @@ const URL_RE = /https?:\/\/[^\s<>"']+/i;
 export const firstUrl = text => (String(text).match(URL_RE)?.[0] || '').replace(/[),.;!?]+$/, '');
 
 const blank = type => ({ id: '', type, title: '', description: '', tags: [], sourceUrl: '', sourceName: '', note: '',
-  ...(type === 'recipe' ? { category: 'Dinner', minutes: null, servings: null, ingredients: [], steps: [], nutrition: null } : {}),
+  ...(type === 'recipe' ? { category: 'Dinner', minutes: null, servings: null, ingredients: [], steps: [], nutrition: null, cost: null } : {}),
   ...(type === 'workout' ? { focus: 'Full body', minutes: null, equipment: '', blocks: [] } : {}),
   ...(type === 'note' ? { category: 'General', body: '' } : {}) });
 
@@ -120,7 +120,8 @@ export function editorView() {
       ${field('Steps', `<textarea name="steps" rows="8" placeholder="Season the chicken.&#10;Cook for 6 minutes per side.">${lines(d.steps)}</textarea>`, 'One step per line.')}
       <fieldset class="macros"><legend>Per serving <span class="optional">optional</span></legend>
         ${field('Calories', num('calories', d.nutrition?.calories))}${field('Protein g', num('protein', d.nutrition?.protein))}${field('Carbs g', num('carbs', d.nutrition?.carbs))}${field('Fat g', num('fat', d.nutrition?.fat))}
-      </fieldset>`;
+      </fieldset>
+      ${field('Cost of the whole recipe ($) <span class="optional">optional</span>', num('cost', d.cost?.total, 'step="0.01" max="100000" placeholder="e.g. 12.50"'), 'What the ingredients you use cost. Cost per serving is worked out from Serves.')}`;
   } else if (d.type === 'workout') {
     const text = formatWorkoutBlocks(d.blocks);
     body = `
@@ -188,6 +189,8 @@ export function readForm(form) {
     if (val('steps') !== undefined) d.steps = val('steps').split('\n').map(s => s.trim()).filter(Boolean);
     const n = { calories: numOrNull('calories'), protein: numOrNull('protein'), carbs: numOrNull('carbs'), fat: numOrNull('fat') };
     d.nutrition = Object.values(n).some(v => v !== null) ? { ...(d.nutrition || {}), ...n } : null;
+    const cost = numOrNull('cost');
+    d.cost = cost === null ? null : { ...(d.cost || {}), total: cost, currency: 'USD' };
   } else if (d.type === 'workout') {
     if (val('focus') !== undefined) d.focus = val('focus');
     d.minutes = numOrNull('minutes');
