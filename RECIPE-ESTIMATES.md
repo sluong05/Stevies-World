@@ -16,6 +16,7 @@ Only these two user-supplied recipes are included. The previous 106-recipe catal
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | Chicken katsu curry | 4 | 859 | 48.6 | 102.4 | 26.5 | $2.59 | $10.36 |
 | Beef udon (without optional egg) | 2 | 630 | 32.6 | 89.9 | 13.1 | $4.81 | $9.61 |
+| Thai tea (cost only) | 4 | — | — | — | — | $0.44 | $1.77 |
 
 Nutrition uses manufacturer labels for curry roux, panko, noodles, beef, soy sauce and Hondashi; USDA FoodData Central covers dry rice, chicken breast, flour, eggs, vegetables, oil, sugar, ginger, and the branded mirin entry. USDA records were retrieved directly through the public FoodData Central API. Calculations sum whole-recipe quantities, then divide by servings. Calories round to whole kcal and other macros to 0.1 g only after summing. Whole-recipe macro displays scale rounded per-serving figures and may differ slightly from the unrounded ingredient sum.
 
@@ -56,6 +57,20 @@ Prices are representative **US online price references**, potentially from diffe
 | mirin | 52.5 ml | 122.5 | 0 | 24.5 | 0 | $0.53 |
 | ginger | 1 g | 0.8 | 0.02 | 0.18 | 0.01 | $0.02 |
 | hondashi | 4.5 g | 10.8 | 1.22 | 1.35 | 0.02 | $0.69 |
+
+### Thai tea (cost only, added October 28, 2026)
+
+No nutrition estimate is included for Thai tea. Cost uses the amounts in your recipe for 4 glasses:
+
+| Ingredient | Whole recipe amount | Price reference | Ingredient cost |
+| --- | --- | --- | --- |
+| Loose Thai tea mix | ½ cup (assumed 40 g) | $13.99 per 400 g ChaTraMue bag ([Walmart](https://www.walmart.com/c/kp/chatramue-thai-tea)) | $1.40 |
+| Granulated sugar | ⅓ cup (about 67 g) | Pantry allowance: $0.03 per tablespoon (12.5 g) | $0.16 |
+| Whole milk | 1 cup | $3.42 per gallon, 16 cups ([AisleGopher Walmart price history](https://aislegopher.com/p/great-value-whole-vitamin-d-milk-gallon/433)) | $0.21 |
+| Water and ice | 4 cups water, ice to serve | — | $0.00 |
+| **Total** | | | **$1.77 ($0.44 per glass)** |
+
+The 40 g weight for ½ cup of loose tea mix is an assumption; weigh yours to refine it. Walmart's listing is a third-party marketplace price, and Asian grocery stores often sell the same bag for less.
 
 ## Reference details
 

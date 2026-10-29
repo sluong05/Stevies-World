@@ -14,6 +14,21 @@ const handlingSource = {
 // Only the recipes supplied by Stevie are included; the previous starter catalog stays removed.
 const curryEstimates = researchedEstimates('japanese-curry-for-katsu');
 const udonEstimates = researchedEstimates('beef-udon-niku-udon');
+// Thai tea: cost only (no nutrition estimate). Checked October 28, 2026.
+const thaiTeaCostParts = {
+  teaMix: 13.99 * 40 / 400,  // ½ cup loose tea mix assumed 40 g, from a $13.99 400 g ChaTraMue bag
+  sugar: 0.03 * 67 / 12.5,   // ⅓ cup sugar ≈ 67 g, at the $0.03 per tablespoon pantry allowance
+  milk: 3.42 / 16,           // 1 cup whole milk from a $3.42 gallon (16 cups)
+};
+const thaiTeaCost = {
+  total: Math.round(Object.values(thaiTeaCostParts).reduce((a, b) => a + b, 0) * 100) / 100,
+  currency: 'USD',
+  note: 'Estimated cost of the ingredients used for all 4 glasses, from representative US online prices checked October 28, 2026: ½ cup loose Thai tea mix (assumed 40 g) from a $13.99 400 g ChaTraMue bag ($1.40), ⅓ cup sugar (about 67 g) at the $0.03 per tablespoon pantry allowance used for your other recipes ($0.16), and 1 cup whole milk from a $3.42 gallon ($0.21). Water and ice are free. Asian grocery stores often sell the same tea mix for less, which would lower the cost.',
+  sources: [
+    { label: 'Walmart · ChaTraMue Thai tea mix, 400 g', url: 'https://www.walmart.com/c/kp/chatramue-thai-tea' },
+    { label: 'AisleGopher · Great Value whole milk, gallon (Walmart price history)', url: 'https://aislegopher.com/p/great-value-whole-vitamin-d-milk-gallon/433' },
+  ],
+};
 export const recipes = [
   {
     id: 'japanese-curry-for-katsu',
@@ -134,7 +149,8 @@ export const recipes = [
       'While the strained tea is still hot, stir in the ⅓ cup sugar until completely dissolved. If brewing two batches, combine them before adding the full amount of sugar.',
       'After pressing and sweetening, let the tea cool, then stir in 1 cup milk. Divide among 4 glasses with ice, or chill the milk tea before serving. Use about ¼ cup milk per glass if mixing individual servings instead.',
     ],
-    note: 'Transcribed from your handwritten cookbook photo: ½ cup Thai tea, ⅓ cup sugar and 4 cups hot water. Your added instruction is to pour in boiling water, steep for 5 minutes, then use the French press. Straining, dissolving the sugar while hot, cooling and serving are inferred steps. Four servings and about 10 minutes of preparation and brewing are assumed; cooling or chilling takes extra time. The brewed tea yield is slightly less than 4 cups because the leaves retain water; milk adds about 1 cup to the batch before ice. Milk was added at your request, using an assumed 1 cup whole milk for the batch (¼ cup per glass); use your preferred milk if desired. Ice is an inferred serving suggestion. Contains milk when made with dairy milk. No nutrition or cost estimate has been added for this recipe.',
+    note: 'Transcribed from your handwritten cookbook photo: ½ cup Thai tea, ⅓ cup sugar and 4 cups hot water. Your added instruction is to pour in boiling water, steep for 5 minutes, then use the French press. Straining, dissolving the sugar while hot, cooling and serving are inferred steps. Four servings and about 10 minutes of preparation and brewing are assumed; cooling or chilling takes extra time. The brewed tea yield is slightly less than 4 cups because the leaves retain water; milk adds about 1 cup to the batch before ice. Milk was added at your request, using an assumed 1 cup whole milk for the batch (¼ cup per glass); use your preferred milk if desired. Ice is an inferred serving suggestion. Contains milk when made with dairy milk. No nutrition estimate has been added for this recipe; the cost is estimated below.',
+    cost: thaiTeaCost,
     sources: [],
   },
 ];
