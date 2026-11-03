@@ -20,8 +20,8 @@ export const builtins = [
     photo: photo(r.photo), sources: r.sources || [],
     ...(r.nutrition ? { nutrition: r.nutrition } : {}),
     ...(r.cost ? { cost: r.cost } : {}),
-    sourceUrl: '', sourceName: 'Your cookbook',
-    createdAt: Date.UTC(2026, 9, 15) - i, updatedAt: Date.UTC(2026, 9, 15) - i,
+    sourceUrl: r.sourceUrl || '', sourceName: r.sourceName || 'Your cookbook',
+    createdAt: r.createdAt ?? Date.UTC(2026, 9, 15) - i, updatedAt: r.updatedAt ?? Date.UTC(2026, 9, 15) - i,
   })),
   ...articles.map((a, i) => ({
     id: a.id, type: 'note', builtIn: true,

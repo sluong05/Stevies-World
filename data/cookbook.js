@@ -1,3 +1,4 @@
+import { shumaiRecipeSource, shumaiNutrition, shumaiCost, shumaiCostSources } from './shu-mai-estimates.js';
 import { researchedEstimates } from './recipe-estimates.js';
 
 // General adult health information.
@@ -152,6 +153,57 @@ export const recipes = [
     note: 'Transcribed from your handwritten cookbook photo: ½ cup Thai tea, ⅓ cup sugar and 4 cups hot water. Your added instruction is to pour in boiling water, steep for 5 minutes, then use the French press. Straining, dissolving the sugar while hot, cooling and serving are inferred steps. Four servings and about 10 minutes of preparation and brewing are assumed; cooling or chilling takes extra time. The brewed tea yield is slightly less than 4 cups because the leaves retain water; milk adds about 1 cup to the batch before ice. Milk was added at your request, using an assumed 1 cup whole milk for the batch (¼ cup per glass); use your preferred milk if desired. Ice is an inferred serving suggestion. Contains milk when made with dairy milk. No nutrition estimate has been added for this recipe; the cost is estimated below.',
     cost: thaiTeaCost,
     sources: [],
+  },
+
+  {
+    id: 'shu-mai-pork-shrimp', title: 'Shu Mai (Pork & Shrimp)',
+    description: 'Pork-and-shrimp dumplings from Nagi at RecipeTin Eats. Makes 24; one serving is 6 dumplings.',
+    category: 'Dinner', minutes: 38, servings: 4,
+    tags: ['RecipeTin Eats', 'Chinese', 'Dim sum', 'Shumai', 'Siu mai'],
+    sourceName: 'RecipeTin Eats', sourceUrl: shumaiRecipeSource.url,
+    createdAt: Date.UTC(2026, 10, 2), updatedAt: Date.UTC(2026, 10, 2),
+    photo: {
+      src: '/assets/shu-mai.jpg', alt: 'Open-topped steamed pork shu mai dumplings on a red plate',
+      author: 'Sumit Surai', sourceUrl: 'https://commons.wikimedia.org/wiki/File:Pork_Siu_Mai.jpg',
+      license: 'CC BY-SA 4.0', licenseUrl: 'https://creativecommons.org/licenses/by-sa/4.0/',
+      caption: 'Serving inspiration; wrappers and garnish may differ. Photo file unchanged; displayed cropped to fit.',
+    },
+    ingredients: [
+      '3 dried shiitake mushrooms',
+      '350 g fatty ground pork',
+      '¾ tsp salt',
+      '2½ tsp sugar',
+      '1 tsp light soy sauce',
+      '1½ tbsp Shaoxing cooking wine',
+      '150 g raw shrimp, peeled, deveined and chopped',
+      '2 tbsp finely minced scallion whites',
+      '24 yellow egg wonton wrappers',
+      '50 g flying fish roe (tobiko), for garnish',
+      'Optional dipping sauce: soy sauce, vinegar and chilli',
+    ],
+    steps: [
+      'Soak mushrooms in boiling water for 20 minutes. Squeeze dry, discard tough stems and mince.',
+      'Beat pork with salt, sugar, soy and wine until sticky; fold in shrimp, mushrooms and scallion.',
+      'Fill wrappers, leaving tops open. Pinch the sides around the filling and flatten each base; dampen and fold loose corners inward.',
+      'Arrange in a perforated-paper-lined steamer with gaps. Cover over simmering water; steam about 8 minutes, until centers reach 165°F (74°C).',
+      'Add roe and serve hot, with dipping condiments separately.',
+    ],
+    note: 'A concise method in our own words; open the original for Nagi’s folding photos and video. Estimates assume 24 dumplings split into 4 portions of 6. Larger dumplings change the per-piece values. Contains pork, shellfish, fish, wheat and soy; egg depends on wrappers. Cost includes the full roe garnish. Omitting roe lowers cost; nutrition has not been recalculated for that variation.',
+    nutrition: {
+      ...shumaiNutrition,
+      note: 'RecipeTin Eats publishes 69 kcal, 5 g protein, 3 g carbs and 4 g fat per dumpling. This page multiplies those rounded estimates by 6 per serving: 414 kcal, 30 g protein, 18 g carbs and 24 g fat (1,656 kcal for 24). These are the author’s estimates, not a laboratory analysis or an independent ingredient calculation. Dipping sauce, rice and other sides are extra. Reviewed November 2, 2026.',
+      sources: [shumaiRecipeSource],
+    },
+    cost: {
+      total: shumaiCost(true), currency: 'USD',
+      note: `US ingredient-use estimate checked November 2, 2026: $${shumaiCost(true).toFixed(2)} for 24, about $${(shumaiCost(true)/24).toFixed(2)} each or $${(shumaiCost(true)/4).toFixed(2)} per 6. Includes 50 g roe; without roe, about $${shumaiCost(false).toFixed(2)} for the batch. Assumes 9 g dried mushrooms, 144 g wrappers (6 g each) and 12 g scallion whites. Pork and wrapper listings are price proxies. Salt, sugar and soy use pantry allowances. Prices vary by store; the wrapper listing may be unavailable locally. Excludes dipping sauce, sides, tax, delivery and unused package contents; buying full packages costs more.`,
+      sources: shumaiCostSources,
+    },
+    sources: [shumaiRecipeSource,
+      { label: 'Shu mai cost calculations and assumptions', url: 'https://github.com/sluong05/Stevies-World/blob/main/RECIPE-ESTIMATES.md#shu-mai-pork--shrimp' },
+      { label: 'Serving photo · Pork Siu Mai by Sumit Surai', url: 'https://commons.wikimedia.org/wiki/File:Pork_Siu_Mai.jpg' },
+      { label: 'Photo license · CC BY-SA 4.0', url: 'https://creativecommons.org/licenses/by-sa/4.0/' },
+    ],
   },
 ];
 

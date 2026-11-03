@@ -6,7 +6,7 @@ import { builtins } from '../src/builtins.js';
 import { normalizeItem } from '../shared/schema.js';
 
 test('only your cookbook recipes ship with the site, alongside the healthy-living notes', () => {
-  assert.deepEqual(recipes.map(item => item.id), ['japanese-curry-for-katsu', 'beef-udon-niku-udon', 'thai-tea-french-press']);
+  assert.deepEqual(recipes.map(item => item.id), ['japanese-curry-for-katsu', 'beef-udon-niku-udon', 'thai-tea-french-press', 'shu-mai-pork-shrimp']);
   assert.ok(articles.length > 0);
   const ids = builtins.map(item => item.id);
   assert.equal(new Set(ids).size, ids.length);

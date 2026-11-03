@@ -1,8 +1,8 @@
 # Your cookbook: nutrition and cost estimates
 
-Reviewed **October 15, 2026**. Recipes were transcribed from the three handwritten cookbook screenshots you supplied. You authorized standard amounts where the screenshots did not specify quantities. These estimates describe those standardized versions; they are not exact labels for your cooked meals or local store quotes.
+Chicken Katsu Curry and Beef Udon estimates were reviewed **October 15, 2026**; Thai Tea cost was reviewed **October 28, 2026**. The Shu Mai recipe, published nutrition and price references were checked **November 2, 2026**. Estimates are not exact labels for your cooked meals or local checkout quotes. Standard amounts for unspecified handwritten quantities were authorized by you.
 
-Only these two user-supplied recipes are included. The previous 106-recipe catalog remains removed.
+The shared catalog contains the four recipes you requested: Chicken Katsu Curry, Beef Udon, Thai Tea and Shu Mai. The previous starter catalog remains removed.
 
 ## Portion assumptions
 
@@ -17,8 +17,9 @@ Only these two user-supplied recipes are included. The previous 106-recipe catal
 | Chicken katsu curry | 4 | 859 | 48.6 | 102.4 | 26.5 | $2.59 | $10.36 |
 | Beef udon (without optional egg) | 2 | 630 | 32.6 | 89.9 | 13.1 | $4.81 | $9.61 |
 | Thai tea (cost only) | 4 | — | — | — | — | $0.44 | $1.77 |
+| Shu mai (6 dumplings, with roe) | 4 | 414 | 30 | 18 | 24 | $3.30 | $13.21 |
 
-Nutrition uses manufacturer labels for curry roux, panko, noodles, beef, soy sauce and Hondashi; USDA FoodData Central covers dry rice, chicken breast, flour, eggs, vegetables, oil, sugar, ginger, and the branded mirin entry. USDA records were retrieved directly through the public FoodData Central API. Calculations sum whole-recipe quantities, then divide by servings. Calories round to whole kcal and other macros to 0.1 g only after summing. Whole-recipe macro displays scale rounded per-serving figures and may differ slightly from the unrounded ingredient sum.
+For chicken katsu curry and beef udon, nutrition uses manufacturer labels for curry roux, panko, noodles, beef, soy sauce and Hondashi; USDA FoodData Central covers dry rice, chicken breast, flour, eggs, vegetables, oil, sugar, ginger, and the branded mirin entry. USDA records were retrieved directly through the public FoodData Central API. Calculations sum whole-recipe quantities, then divide by servings. Calories round to whole kcal and other macros to 0.1 g only after summing. Whole-recipe macro displays scale rounded per-serving figures and may differ slightly from the unrounded ingredient sum.
 
 S&B calls 1/5 of a box one label serving (18 g, rounded); the whole 92 g box is calculated as five label servings, not 92 ÷ 18 servings. Hondashi assumes 3 g per teaspoon; its listed fat range is represented by the midpoint. Mirin calories use the label, with no assumed alcohol evaporation; alcohol and label rounding mean calories need not equal exactly 4×protein + 4×carbs + 9×fat. All quantities are edible ingredient amounts; cooking water has no macros or ingredient cost. For katsu, all coating ingredients prepared are counted, even though some may be left over. Absorbed frying oil is modeled at 10 g per cutlet; this is an assumption, not a measured value. An additional 5 g oil per cutlet adds roughly 44 kcal and 5 g fat. Frying-oil cost covers the 40 g absorbed, not all oil filling the pot: initial shopping cost may therefore be higher, and actual cost depends on whether leftover oil is reused or discarded.
 
@@ -117,3 +118,31 @@ One large egg (50 g edible weight) adds approximately **72 kcal, 6.3 g protein, 
 ## Photos
 
 The chicken katsu curry photo is the image you supplied, used directly without alteration. Rice is included in the meal estimates. The extra egg topping shown in the photo is excluded; the two eggs used for coating are already counted. The udon image is an AI-assisted adaptation of the food photo embedded in your screenshot. It can differ in small visual details. See [photo credits](assets/CREDITS.md) for sources and image prompt details.
+
+
+## Shu mai (pork & shrimp)
+
+Recipe: [Nagi’s Siu Mai at RecipeTin Eats](https://www.recipetineats.com/siu-mai-shumai-steamed-dumplings/). The website keeps a short method in our own words and links to the original folding photos and video.
+
+### Portion and nutrition basis
+
+The site assumes **24 dumplings, divided into 4 servings of 6**. The author reports **69 kcal, 5 g protein, 3 g carbs and 4 g fat per dumpling**; multiplying those rounded figures by six gives **414 kcal, 30 g protein, 18 g carbs and 24 g fat** per serving. For 24, that is approximately **1,656 kcal**. These are the publisher’s estimates, not a new ingredient-level nutrition calculation. Larger pieces, pork fat content and wrapper size change actual nutrition. Dipping sauce and sides are extra. Nutrition has not been independently recalculated for omitting or substituting the garnish.
+
+### Ingredient-use costs
+
+Representative US online price references checked November 2, 2026. Includes the recipe’s **50 g flying fish roe garnish**. Weight assumptions used for pricing: 3 dried mushrooms at 3 g each; 24 wrappers at 6 g each; 2 tbsp scallion whites at 12 g. The pork and wrapper listings are price proxies and may differ from the product you use. The wrapper listing is unavailable at the store displayed on the source page; the listed price is a benchmark, not an availability claim. Wine uses the upper end of the displayed price range. Small seasonings use explicit pantry allowances.
+
+| Ingredient | Amount used | Estimated cost | Price basis |
+| --- | --- | --- | --- |
+| Ground pork | 350 g | $3.56 | $6.92 / 1.5 lb. The 85/15 tray is a price proxy; fattier butcher mince may cost more. [Source](https://www.walmart.com/c/kp/ground-pork). |
+| Peeled raw shrimp | 150 g | $2.98 | $6.76 / 12 oz. Counts peeled, tail-off edible weight. [Source](https://www.walmart.com/c/best-sellers/shrimp-prawns). |
+| Dried shiitake | 9 g | $0.72 | $10.99 / 138 g. Assumes 3 g per dried mushroom (9 g total). [Source](https://www.sayweee.com/en/product/Premium-Dried-Shiitake-Mushrooms-Grade-AAA/2879934). |
+| Wonton wrappers | 144 g | $1.27 | $2.99 / 12 oz listed benchmark; unavailable at the displayed store. Assumes 24 wrappers at 6 g each. Use yellow egg wrappers; this listing is only a price proxy. [Source](https://www.kroger.com/p/dynasty-won-ton-wrappers/0001115223004). |
+| Shaoxing cooking wine | 22.5 ml | $0.11 | $3.79 / 750 ml, the upper end of the listed $2.29–$3.79 range. [Source](https://www.weee.com/en/grocery-near-me/lang-en/explore/chinese-cooking-wine). |
+| Scallion whites | 12 g | $0.09 | $0.78 / bunch; assumes 100 g usable bunch and 12 g for 2 tbsp. [Source](https://www.super1foods.com/sm/pickup/rsid/610/categories/vegetables/onions-garlic-id-C20109806). |
+| Sugar | 10.42 g | $0.03 | Pantry allowance: $0.03 / tablespoon (12.5 g). |
+| Light soy sauce | 5 ml | $0.04 | Pantry allowance: $0.45 / 60 ml. |
+| Salt | 1 allowance | $0.01 | $0.01 pantry allowance for ¾ tsp. |
+| Flying fish roe | 50 g | $4.41 | $5.00 / 2 oz. Includes the full 50 g garnish listed by the recipe. [Source](https://svenfish.com/products/tobiko-fish-roe-2oz). |
+
+**Batch of 24: $13.21; one dumpling: about $0.55; six dumplings: about $3.30.** Without roe, the batch cost is about **$8.80**. Sum unrounded costs before rounding the batch total; displayed ingredient lines can differ by a cent in aggregate. Buying complete packages costs more. Tax, delivery, dipping sauce, sides and unused package contents are excluded.

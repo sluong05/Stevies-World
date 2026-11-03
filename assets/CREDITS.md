@@ -29,3 +29,7 @@ Image edit prompt: Extract only the lower-right beef udon photograph from the su
 ## App icon and scenery
 
 `icon.svg`, its PNG sizes and the painted landscape on the home screen are original artwork drawn in code for this site.
+
+## Shu mai
+
+`shu-mai.jpg`: [“Pork Siu Mai”](https://commons.wikimedia.org/wiki/File:Pork_Siu_Mai.jpg) by Sumit Surai, [CC BY-SA 4.0](https://creativecommons.org/licenses/by-sa/4.0/). [Original image](https://upload.wikimedia.org/wikipedia/commons/e/eb/Pork_Siu_Mai.jpg). File unchanged, displayed cropped to fit; photo remains under CC BY-SA 4.0. Serving inspiration, not a photograph of the exact RecipeTin Eats recipe.

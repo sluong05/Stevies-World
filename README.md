@@ -2,7 +2,7 @@
 
 My recipes, workouts and notes in one place, built to open fast on my phone.
 
-- **Recipes**: your cookbook recipes (Chicken Katsu Curry, Beef Udon, Thai Tea) plus anything you add. Cook mode shows one step at a time in big text and keeps the screen awake.
+- **Recipes**: your cookbook recipes (Chicken Katsu Curry, Beef Udon, Thai Tea, Shu Mai) plus anything you add. Cook mode shows one step at a time in big text and keeps the screen awake.
 - **Workouts**: saved routines with sections, sets, reps and rest. Start workout goes one exercise at a time and has a rest timer.
 - **Notes**: anything else, like sizes, gear, routines or links. The five healthy-living guides live here.
 - **Paste a link**: paste a TikTok, Instagram, YouTube or recipe-site link (or just the caption text) and it fills in the recipe or workout for you to check and save.
