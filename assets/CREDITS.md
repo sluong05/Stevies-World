@@ -32,4 +32,4 @@ Image edit prompt: Extract only the lower-right beef udon photograph from the su
 
 ## Shu mai
 
-`shu-mai.jpg`: [“Pork Siu Mai”](https://commons.wikimedia.org/wiki/File:Pork_Siu_Mai.jpg) by Sumit Surai, [CC BY-SA 4.0](https://creativecommons.org/licenses/by-sa/4.0/). [Original image](https://upload.wikimedia.org/wikipedia/commons/e/eb/Pork_Siu_Mai.jpg). File unchanged, displayed cropped to fit; photo remains under CC BY-SA 4.0. Serving inspiration, not a photograph of the exact RecipeTin Eats recipe.
+`shu-mai-ai.jpg`: original AI-generated serving illustration created November 2, 2026 with the built-in OpenAI image generation tool at the site owner’s request. Converted to JPEG for the web and displayed cropped to fit. It is not a photograph of a cooked batch. [Final generation prompt](SHU-MAI-IMAGE-PROMPT.md).

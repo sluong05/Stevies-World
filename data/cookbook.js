@@ -163,10 +163,9 @@ export const recipes = [
     sourceName: 'RecipeTin Eats', sourceUrl: shumaiRecipeSource.url,
     createdAt: Date.UTC(2026, 10, 2), updatedAt: Date.UTC(2026, 10, 2),
     photo: {
-      src: '/assets/shu-mai.jpg', alt: 'Open-topped steamed pork shu mai dumplings on a red plate',
-      author: 'Sumit Surai', sourceUrl: 'https://commons.wikimedia.org/wiki/File:Pork_Siu_Mai.jpg',
-      license: 'CC BY-SA 4.0', licenseUrl: 'https://creativecommons.org/licenses/by-sa/4.0/',
-      caption: 'Serving inspiration; wrappers and garnish may differ. Photo file unchanged; displayed cropped to fit.',
+      src: '/assets/shu-mai-ai.jpg', alt: 'AI-generated serving illustration of pork-and-shrimp shu mai with yellow wrappers and orange fish roe in a bamboo steamer',
+      author: 'AI-generated with OpenAI image generation',
+      caption: 'AI-generated serving illustration; appearance may differ from the finished recipe.',
     },
     ingredients: [
       '3 dried shiitake mushrooms',
@@ -201,8 +200,6 @@ export const recipes = [
     },
     sources: [shumaiRecipeSource,
       { label: 'Shu mai cost calculations and assumptions', url: 'https://github.com/sluong05/Stevies-World/blob/main/RECIPE-ESTIMATES.md#shu-mai-pork--shrimp' },
-      { label: 'Serving photo · Pork Siu Mai by Sumit Surai', url: 'https://commons.wikimedia.org/wiki/File:Pork_Siu_Mai.jpg' },
-      { label: 'Photo license · CC BY-SA 4.0', url: 'https://creativecommons.org/licenses/by-sa/4.0/' },
     ],
   },
 ];
