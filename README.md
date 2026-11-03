@@ -39,6 +39,10 @@ The passcode protects reading and changing your library and using the link impor
 - **Share straight from TikTok or Instagram on iPhone**: Settings in the app has a 4-step Shortcut recipe. It sends a shared link to `https://<your-site>/?add=<link>`.
 - **Android**: once it's installed, Stevies World appears in the share menu.
 
+## App updates
+
+While online, the app checks for new versions when you return to it. Recipe modules use the network first, with a cached fallback offline. A new version refreshes a browsing page automatically; refreshing is deferred during editing, settings, cook mode or a workout. Each build preloads the complete app module graph before activating. Personal items, favorites, sync settings and offline photos remain in their existing storage. A missing item page includes **Reload app** as a recovery option.
+
 ## Run locally
 
 Requires Node.js 20 or newer. There's nothing to install.

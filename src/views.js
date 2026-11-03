@@ -172,7 +172,7 @@ const lineList = (lines, ordered) => {
 
 export function itemView(id) {
   const item = getItem(id);
-  if (!item) return `<section class="page-head"><h1>Not found</h1></section><p class="empty-line">This item was deleted or hasn’t synced to this device yet. <a href="#/">Go home</a></p>`;
+  if (!item) return `<section class="page-head"><h1>Can’t find this item yet</h1></section><p class="empty-line">If it was just added, reload to get the latest recipes. You can also check your connection and try again.</p><div class="empty-actions"><button class="btn btn-primary" data-action="reload-app">Reload app</button><a class="btn btn-ghost" href="#/recipes">See recipes</a></div>`;
   const sec = SECTION[item.type];
   const builtIn = isBuiltIn(item.id);
   const primary = item.type === 'recipe' && item.steps?.length ? `<a class="btn btn-primary" href="#/item/${encodeURIComponent(item.id)}/cook">${icon('play')}Cook mode</a>`

@@ -1,3 +1,4 @@
+import { watchAppUpdates } from './updates.js';
 import { $, $$, toast } from './ui.js';
 import * as store from './store.js';
 import { applyTheme, setTheme, setAutoNight } from './theme.js';
@@ -100,6 +101,7 @@ document.addEventListener('click', async event => {
   const action = el.dataset.action;
   if (['theme', 'save', 'filter', 'quick', 'pick', 'paste-link', 'clipboard', 'back', 'tag', 'revert', 'delete', 'remove-photo', 'mode-next', 'mode-prev', 'toggle-ingredients', 'timer-start', 'timer-stop', 'sync-now', 'forget-pass', 'export'].includes(action)) event.preventDefault();
   switch (action) {
+    case 'reload-app': location.reload(); break;
     case 'save': { const on = await store.toggleSaved(el.dataset.id); toast(on ? 'Added to favorites' : 'Removed from favorites'); break; }
     case 'filter': ui.filters[el.dataset.key] = el.dataset.value; render({ keepScroll: true }); break;
     case 'quick': ui.quick[el.dataset.key] = ui.quick[el.dataset.key] === el.dataset.value ? '' : el.dataset.value; render({ keepScroll: true }); break;
@@ -219,5 +221,10 @@ render();
 handleIncoming();
 
 if ('serviceWorker' in navigator && location.hostname !== '127.0.0.1' && location.hostname !== 'localhost') {
-  navigator.serviceWorker.register('/sw.js').catch(() => {});
+  watchAppUpdates({
+    serviceWorker: navigator.serviceWorker, windowTarget: window, documentTarget: document,
+    canReload: () => !mode.kind && !['new', 'edit', 'draft', 'add', 'settings'].includes(parseRoute().parts[0])
+      && !document.activeElement?.matches('input, textarea, select, [contenteditable="true"]'),
+    reload: () => location.reload(),
+  });
 }
