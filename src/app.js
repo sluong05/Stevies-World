@@ -6,6 +6,8 @@ import { homeView, listView, itemView, ui } from './views.js';
 import { editing, addView, editorView, startNew, startEdit, draftFromText, importFromLink, firstUrl, readForm, switchType, updatePreview, setPhoto, saveDraft, removeItem } from './editor.js';
 import { mode, modeView, enterMode, exitMode, startTimer, stopTimer } from './modes.js';
 import { settingsView } from './settings.js';
+import { dueLabel } from '../shared/tasks.js';
+import { todoView, todoUi, quickPreview, toggleTask, toggleStar, toggleStep, quickAdd, clearDone } from './todo.js';
 
 applyTheme();
 const main = $('#main');
@@ -31,21 +33,22 @@ function render({ keepScroll = false } = {}) {
   else if (a === 'recipes') { html = listView('recipe'); tab = 'recipes'; }
   else if (a === 'workouts') { html = listView('workout'); tab = 'workouts'; }
   else if (a === 'notes') { html = listView('note'); tab = 'notes'; }
+  else if (a === 'todo') { html = todoView(); tab = 'todo'; }
   else if (a === 'item' && b && (c === 'cook' || c === 'go')) { enterMode(c === 'cook' ? 'cook' : 'workout', b); html = modeView(); }
-  else if (a === 'item' && b) { html = itemView(b); tab = { recipe: 'recipes', workout: 'workouts', note: 'notes' }[store.getItem(b)?.type] || ''; }
+  else if (a === 'item' && b) { html = itemView(b); tab = { recipe: 'recipes', workout: 'workouts', note: 'notes', task: 'todo' }[store.getItem(b)?.type] || ''; }
   else if (a === 'add') { html = addView(params); tab = 'add'; }
-  else if (a === 'new' && ['recipe', 'workout', 'note'].includes(b)) { if (changed || !editing.draft) startNew(b); html = editorView(); }
+  else if (a === 'new' && ['recipe', 'workout', 'note', 'task'].includes(b)) { if (changed || !editing.draft) startNew(b); html = editorView(); }
   else if (a === 'edit' && b) { if (changed || !editing.draft) startEdit(b); html = editorView(); }
   else if (a === 'draft') { html = editorView(); }
   else if (a === 'settings') { html = settingsView(); tab = 'settings'; }
   else { html = homeView(); tab = 'home'; }
 
-  const focused = document.activeElement?.id === 'search' ? document.activeElement : null;
+  const focused = ['search', 'quick-task'].includes(document.activeElement?.id) ? document.activeElement : null;
   const caret = focused?.selectionStart;
   main.innerHTML = html;
   main.dataset.view = a || 'home';
   $$('[data-tab]').forEach(el => (el.dataset.tab === tab ? el.setAttribute('aria-current', 'page') : el.removeAttribute('aria-current')));
-  if (focused) { const s = $('#search'); s?.focus(); try { s?.setSelectionRange(caret, caret); } catch { /* ignore */ } }
+  if (focused) { const s = $(`#${focused.id}`); s?.focus(); try { s?.setSelectionRange(caret, caret); } catch { /* ignore */ } }
   if (changed) {
     if (['recipes', 'workouts', 'notes'].includes(a) || !a) lastListRoute = location.hash || '#/';
     if (!keepScroll) window.scrollTo({ top: 0, behavior: 'instant' });
@@ -99,10 +102,24 @@ document.addEventListener('click', async event => {
   const el = event.target.closest('[data-action]');
   if (!el) return;
   const action = el.dataset.action;
-  if (['theme', 'save', 'filter', 'quick', 'pick', 'paste-link', 'clipboard', 'back', 'tag', 'revert', 'delete', 'remove-photo', 'mode-next', 'mode-prev', 'toggle-ingredients', 'timer-start', 'timer-stop', 'sync-now', 'forget-pass', 'export'].includes(action)) event.preventDefault();
+  if (['theme', 'save', 'filter', 'quick', 'pick', 'paste-link', 'clipboard', 'back', 'tag', 'revert', 'delete', 'remove-photo', 'mode-next', 'mode-prev', 'toggle-ingredients', 'timer-start', 'timer-stop', 'sync-now', 'forget-pass', 'export', 'task-toggle', 'task-star', 'step-toggle', 'set-due', 'todo-filter', 'clear-done'].includes(action)) event.preventDefault();
   switch (action) {
     case 'reload-app': location.reload(); break;
     case 'save': { const on = await store.toggleSaved(el.dataset.id); toast(on ? 'Added to favorites' : 'Removed from favorites'); break; }
+    case 'task-toggle': {
+      const row = el.closest('.task-row');
+      if (row && !row.classList.contains('is-done')) { row.classList.add('checking'); await new Promise(r => setTimeout(r, 380)); }
+      toast(await toggleTask(el.dataset.id));
+      break;
+    }
+    case 'task-star': await toggleStar(el.dataset.id); break;
+    case 'step-toggle': await toggleStep(el.dataset.id, Number(el.dataset.index)); break;
+    case 'todo-filter': todoUi.filter = el.dataset.value; render({ keepScroll: true }); break;
+    case 'set-due': { const input = el.form?.querySelector('input[name="due"]'); if (input) input.value = el.dataset.value; break; }
+    case 'clear-done':
+      if (el.dataset.confirm) { const n = await clearDone(); toast(`Cleared ${n}`); }
+      else { el.dataset.confirm = '1'; el.lastChild.textContent = 'Tap again to clear'; el.classList.add('btn-danger', 'confirming'); setTimeout(() => { if (el.isConnected) { delete el.dataset.confirm; render({ keepScroll: true }); } }, 4000); }
+      break;
     case 'filter': ui.filters[el.dataset.key] = el.dataset.value; render({ keepScroll: true }); break;
     case 'quick': ui.quick[el.dataset.key] = ui.quick[el.dataset.key] === el.dataset.value ? '' : el.dataset.value; render({ keepScroll: true }); break;
     case 'pick': {
@@ -152,6 +169,7 @@ document.addEventListener('click', async event => {
 
 document.addEventListener('input', event => {
   if (event.target.id === 'search') { ui.query = event.target.value; render({ keepScroll: true }); }
+  if (event.target.id === 'quick-task') { todoUi.quickText = event.target.value; const pv = $('#quick-preview'); if (pv) pv.innerHTML = quickPreview(event.target.value); }
   if (event.target.name === 'exercises') updatePreview(event.target.form);
 });
 
@@ -187,6 +205,14 @@ document.addEventListener('submit', async event => {
       toast('Saved');
       location.hash = `#/item/${encodeURIComponent(saved.id)}`;
     } catch (error) { err.hidden = false; err.textContent = error.message; err.scrollIntoView({ block: 'center', behavior: 'smooth' }); }
+  } else if (form.dataset.form === 'quick-task') {
+    const saved = await quickAdd(form.text.value);
+    if (!saved) { toast('Type what needs doing first'); return; }
+    todoUi.quickText = '';
+    render({ keepScroll: true });
+    $('#quick-task')?.focus();
+    const when = saved.due ? dueLabel(saved.due) : '';
+    toast(when ? `Added for ${/^(Today|Tomorrow)$/.test(when) ? when.toLowerCase() : when}` : 'Added');
   } else if (form.dataset.form === 'passcode') {
     const code = form.passcode.value.trim();
     if (!code) { toast('Enter your passcode'); return; }

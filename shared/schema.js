@@ -1,7 +1,9 @@
 // One item shape for everything in the library: recipes, workouts and notes.
 // Used by the browser (before saving) and the API (before storing) so bad data never lands.
 
-export const TYPES = ['recipe', 'workout', 'note'];
+export const TYPES = ['recipe', 'workout', 'note', 'task'];
+const REPEAT_VALUES = ['', 'daily', 'weekdays', 'weekly', 'biweekly', 'monthly', 'yearly'];
+const isDate = v => typeof v === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(v);
 export const RECIPE_CATEGORIES = ['Breakfast', 'Lunch', 'Dinner', 'Snack', 'Dessert', 'Drinks', 'Other'];
 export const WORKOUT_FOCUS = ['Full body', 'Upper body', 'Lower body', 'Push', 'Pull', 'Legs', 'Core', 'Cardio', 'Mobility', 'Other'];
 
@@ -61,7 +63,7 @@ export function normalizePhoto(photo) {
 
 export function normalizeItem(raw, { now = Date.now() } = {}) {
   if (!raw || typeof raw !== 'object' || Array.isArray(raw)) fail('That item is empty.');
-  const type = TYPES.includes(raw.type) ? raw.type : fail('Choose recipe, workout or note.');
+  const type = TYPES.includes(raw.type) ? raw.type : fail('Choose recipe, workout, note or to-do.');
   const id = str(raw.id, 80, 'ID', { required: true });
   if (!/^[a-z0-9][a-z0-9-]{2,79}$/i.test(id)) fail('That item has an invalid ID.');
   const item = {
@@ -109,6 +111,15 @@ export function normalizeItem(raw, { now = Date.now() } = {}) {
         name: str(e?.name, 120, 'Exercise'), sets: str(e?.sets, 20, 'Sets'), reps: str(e?.reps, 40, 'Reps'), rest: str(e?.rest, 30, 'Rest'), note: str(e?.note, 300, 'Exercise note'),
       })).filter(e => e.name),
     })).filter(b => b.exercises.length);
+  } else if (type === 'task') {
+    item.list = str(raw.list, 40, 'List');
+    item.due = isDate(raw.due) ? raw.due : '';
+    item.repeat = REPEAT_VALUES.includes(raw.repeat) ? raw.repeat : '';
+    item.important = Boolean(raw.important);
+    item.done = Boolean(raw.done);
+    item.doneAt = item.done && Number.isFinite(raw.doneAt) ? raw.doneAt : item.done ? item.updatedAt : null;
+    item.steps = (Array.isArray(raw.steps) ? raw.steps : []).slice(0, 50)
+      .map(s => ({ text: str(typeof s === 'string' ? s : s?.text, 300, 'Step'), done: Boolean(s?.done) })).filter(s => s.text);
   } else {
     item.category = str(raw.category, 40, 'Category') || 'General';
     item.body = str(raw.body, 40000, 'Note text', { multiline: true });
@@ -123,6 +134,6 @@ export function newId(type = 'item') {
 
 /** Plain text used for search. */
 export function searchText(item) {
-  const parts = [item.title, item.description, item.category, item.focus, item.equipment, item.note, item.body, item.sourceName, ...(item.tags || []), ...(item.ingredients || []), ...(item.blocks || []).flatMap(b => [b.name, ...b.exercises.map(e => e.name)])];
+  const parts = [item.title, item.description, item.category, item.focus, item.equipment, item.note, item.body, item.list, item.sourceName, ...(item.type === 'task' ? (item.steps || []).map(s => s.text) : []), ...(item.tags || []), ...(item.ingredients || []), ...(item.blocks || []).flatMap(b => [b.name, ...b.exercises.map(e => e.name)])];
   return parts.filter(Boolean).join(' ').toLowerCase();
 }

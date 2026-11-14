@@ -2,8 +2,10 @@ import { escape, icon, formatMinutes, exerciseCount, plural, renderBody, greetin
 import { allItems, byType, getItem, isSaved, search, isBuiltIn, isEditedBuiltIn, syncState } from './store.js';
 import { scenery } from './scenery.js';
 import { activeTheme } from './theme.js';
+import { todoShelf, taskView } from './todo.js';
+import { dueLabel } from '../shared/tasks.js';
 
-const SECTION = { recipe: { path: 'recipes', name: 'Recipes', icon: 'bowl' }, workout: { path: 'workouts', name: 'Workouts', icon: 'dumbbell' }, note: { path: 'notes', name: 'Notes', icon: 'leaf' } };
+const SECTION = { recipe: { path: 'recipes', name: 'Recipes', icon: 'bowl' }, workout: { path: 'workouts', name: 'Workouts', icon: 'dumbbell' }, note: { path: 'notes', name: 'Notes', icon: 'leaf' }, task: { path: 'todo', name: 'To-do', icon: 'checkbox' } };
 export const ui = { query: '', filters: { recipes: 'All', workouts: 'All', notes: 'All' }, quick: { recipes: '', workouts: '' }, sort: { recipes: 'new' } };
 
 const newest = (a, b) => (b.updatedAt || 0) - (a.updatedAt || 0);
@@ -34,6 +36,7 @@ export const scheme = e => (e.sets && e.reps ? `${e.sets} × ${e.reps}` : e.reps
 const FOCUS_CLASS = f => ({ 'Lower body': 'legs', Legs: 'legs', 'Upper body': 'upper', Push: 'upper', Pull: 'upper', Core: 'core', Cardio: 'cardio', Mobility: 'core' }[f] || 'full');
 
 export function card(item, { size = '' } = {}) {
+  if (item.type === 'task') return `<article class="card card-note card-task ${size}"><a class="card-link" href="#/item/${encodeURIComponent(item.id)}"><span class="note-category">${item.done ? 'Done' : 'To-do'}${item.due ? ` · ${escape(dueLabel(item.due))}` : ''}</span><h3>${escape(item.title)}</h3>${item.note ? `<p>${escape(item.note.slice(0, 140))}</p>` : ''}</a></article>`;
   const href = `#/item/${encodeURIComponent(item.id)}`;
   if (item.type === 'recipe') {
     return `<article class="card card-recipe ${size}">
@@ -67,7 +70,7 @@ export function homeView() {
   const time = theme === 'night' ? 'night' : theme === 'retro' ? 'day' : timeOfDay();
   const q = ui.query.trim();
   const items = allItems();
-  const favs = items.filter(i => isSaved(i.id)).sort(newest);
+  const favs = items.filter(i => i.type !== 'task' && isSaved(i.id)).sort(newest);
   const recipes = byType('recipe').sort(newest);
   const workouts = byType('workout').sort(newest);
   const notes = byType('note').sort(newest);
@@ -89,6 +92,7 @@ export function homeView() {
       <button class="btn btn-soft" data-action="pick" data-type="recipe" ${recipes.length ? '' : 'disabled'}>${icon('shuffle')}Pick a meal</button>
       <button class="btn btn-soft" data-action="pick" data-type="workout" ${workouts.length ? '' : 'disabled'}>${icon('shuffle')}Pick a workout</button>
     </div>
+    ${todoShelf()}
     ${favs.length ? shelf('Favorites', favs.slice(0, 12), '', '') : ''}
     ${shelf('Recipes', recipes.slice(0, 10), '#/recipes', emptyInvite('recipe', 'No recipes yet.'))}
     ${shelf('Workouts', workouts.slice(0, 10), '#/workouts', emptyInvite('workout', 'Save a workout here and it’s ready whenever you are. Paste one from TikTok or Instagram, or write your own.'))}
@@ -173,6 +177,7 @@ const lineList = (lines, ordered) => {
 export function itemView(id) {
   const item = getItem(id);
   if (!item) return `<section class="page-head"><h1>Can’t find this item yet</h1></section><p class="empty-line">If it was just added, reload to get the latest recipes. You can also check your connection and try again.</p><div class="empty-actions"><button class="btn btn-primary" data-action="reload-app">Reload app</button><a class="btn btn-ghost" href="#/recipes">See recipes</a></div>`;
+  if (item.type === 'task') return taskView(id);
   const sec = SECTION[item.type];
   const builtIn = isBuiltIn(item.id);
   const primary = item.type === 'recipe' && item.steps?.length ? `<a class="btn btn-primary" href="#/item/${encodeURIComponent(item.id)}/cook">${icon('play')}Cook mode</a>`

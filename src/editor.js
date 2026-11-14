@@ -2,6 +2,7 @@ import { escape, icon, compressImage, toast, plural } from './ui.js';
 import { getItem, saveItem, deleteItem, isBuiltIn, allItems, passcodeHeader } from './store.js';
 import { parseText, parseWorkoutBlocks, formatWorkoutBlocks } from '../shared/parse.js';
 import { RECIPE_CATEGORIES, WORKOUT_FOCUS, newId } from '../shared/schema.js';
+import { REPEATS, todayISO, addDays, parseSteps, formatSteps } from '../shared/tasks.js';
 
 // The draft being edited (new, imported or existing). Kept in memory so the type
 // switch and photo picker don't lose what you typed.
@@ -13,7 +14,8 @@ export const firstUrl = text => (String(text).match(URL_RE)?.[0] || '').replace(
 const blank = type => ({ id: '', type, title: '', description: '', tags: [], sourceUrl: '', sourceName: '', note: '',
   ...(type === 'recipe' ? { category: 'Dinner', minutes: null, servings: null, ingredients: [], steps: [], nutrition: null, cost: null } : {}),
   ...(type === 'workout' ? { focus: 'Full body', minutes: null, equipment: '', blocks: [] } : {}),
-  ...(type === 'note' ? { category: 'General', body: '' } : {}) });
+  ...(type === 'note' ? { category: 'General', body: '' } : {}),
+  ...(type === 'task' ? { list: '', due: '', repeat: '', important: false, done: false, steps: [] } : {}) });
 
 export function startNew(type) {
   editing.draft = blank(type);
@@ -93,6 +95,7 @@ export function addView(params) {
       <a class="scratch" href="#/new/recipe">${icon('bowl')}<span>Recipe</span></a>
       <a class="scratch" href="#/new/workout">${icon('dumbbell')}<span>Workout</span></a>
       <a class="scratch" href="#/new/note">${icon('leaf')}<span>Note</span></a>
+      <a class="scratch" href="#/new/task">${icon('checkbox')}<span>To-do</span></a>
     </div>
   </section>`;
 }
@@ -132,6 +135,24 @@ export function editorView() {
       ${field('Equipment', `<input name="equipment" value="${escape(d.equipment)}" placeholder="Dumbbells, bench" />`)}
       ${field('Exercises', `<textarea name="exercises" rows="10" placeholder="Warm-up:&#10;Bike 5 min&#10;&#10;Main:&#10;Goblet squat 3x10 rest 60s&#10;Push-ups 3x12 (slow down)">${escape(text)}</textarea>`, 'One per line, like “Goblet squat 3x10 rest 60s (notes)”. A line ending in a colon starts a new section.')}
       <p class="parse-preview" id="parse-preview">${previewText(d.blocks)}</p>`;
+  } else if (d.type === 'task') {
+    const lists = [...new Set([...allItems().filter(i => i.type === 'task').map(i => i.list), 'Personal', 'School', 'Job hunt', 'Errands', 'Home'])].filter(Boolean);
+    const today = todayISO();
+    const nextMonday = addDays(today, ((8 - new Date().getDay()) % 7) || 7);
+    body = `
+      <div class="field">
+        <span class="field-label">Due</span>
+        <div class="due-row"><input type="date" name="due" value="${escape(d.due || '')}" aria-label="Due date" />
+          <div class="due-quick">${[[today, 'Today'], [addDays(today, 1), 'Tomorrow'], [nextMonday, 'Next week'], ['', 'No date']].map(([v, l]) => `<button type="button" class="chip chip-outline" data-action="set-due" data-value="${v}">${l}</button>`).join('')}</div></div>
+      </div>
+      <div class="field-row field-row-2">
+        ${field('Repeat', `<select name="repeat">${REPEATS.map(([v, l]) => `<option value="${v}" ${v === (d.repeat || '') ? 'selected' : ''}>${l}</option>`).join('')}</select>`)}
+        ${field('List', `<input name="list" list="task-lists" value="${escape(d.list || '')}" placeholder="Personal" /><datalist id="task-lists">${lists.map(c => `<option value="${escape(c)}"></option>`).join('')}</datalist>`)}
+      </div>
+      <label class="toggle"><input type="checkbox" name="important" ${d.important ? 'checked' : ''}/><span>Important. Shows first and gets a star.</span></label>
+      ${field('Steps <span class="optional">optional</span>', `<textarea name="steps" rows="5" placeholder="Find the form&#10;Fill it out&#10;Submit before Friday">${escape(formatSteps(d.steps))}</textarea>`, 'Break it into smaller pieces, one per line. You can tick them off one at a time.')}
+      ${field('Notes', `<textarea name="note" rows="5" placeholder="Details, addresses, who to ask, what you already tried…">${escape(d.note)}</textarea>`)}
+      ${field('Link <span class="optional">optional</span>', `<input name="sourceUrl" type="url" inputmode="url" value="${escape(d.sourceUrl)}" placeholder="https://" />`)}`;
   } else {
     body = `
       ${field('Category', `<input name="category" list="note-cats" value="${escape(d.category)}" /><datalist id="note-cats">${categories.map(c => `<option value="${escape(c)}"></option>`).join('')}</datalist>`)}
@@ -139,11 +160,12 @@ export function editorView() {
   }
   return `<form class="editor" data-form="editor" novalidate>
     <header class="editor-head">
-      <a class="round-btn" href="${d.id ? `#/item/${encodeURIComponent(d.id)}` : '#/add'}" aria-label="Cancel">${icon('close')}</a>
-      <h1>${isNew ? (editing.origin === 'import' ? 'Check and save' : `New ${d.type}`) : 'Edit'}</h1>
+      <a class="round-btn" href="${d.id ? `#/item/${encodeURIComponent(d.id)}` : d.type === 'task' ? '#/todo' : '#/add'}" aria-label="Cancel">${icon('close')}</a>
+      <h1>${isNew ? (editing.origin === 'import' ? 'Check and save' : d.type === 'task' ? 'New to-do' : `New ${d.type}`) : 'Edit'}</h1>
       <button class="btn btn-primary btn-small" type="submit">Save</button>
     </header>
     ${editing.banner ? `<p class="form-msg msg-info">${escape(editing.banner)}</p>` : ''}
+    ${d.type === 'task' ? `${field('What needs doing?', `<input name="title" value="${escape(d.title)}" required maxlength="150" placeholder="Renew passport" />`)}${body}` : `
     ${isNew ? `<fieldset class="type-pick type-pick-tight"><legend class="sr-only">Type</legend>${types.map(([v, l]) => `<label class="seg"><input type="radio" name="type" value="${v}" ${v === d.type ? 'checked' : ''} data-action="switch-type"/><span>${l}</span></label>`).join('')}</fieldset>` : ''}
     <div class="photo-pick">
       ${d.photo?.src ? `<img src="${escape(d.photo.src)}" alt="" />` : `<div class="photo-empty">${icon('camera')}</div>`}
@@ -157,7 +179,7 @@ export function editorView() {
     ${body}
     ${d.type !== 'note' ? field('Notes', `<textarea name="note" rows="3">${escape(d.note)}</textarea>`) : ''}
     ${field('Tags', `<input name="tags" value="${escape((d.tags || []).join(', '))}" placeholder="high protein, meal prep" />`, 'Separate with commas.')}
-    ${field('Link to the original', `<input name="sourceUrl" type="url" inputmode="url" value="${escape(d.sourceUrl)}" placeholder="https://" />`)}
+    ${field('Link to the original', `<input name="sourceUrl" type="url" inputmode="url" value="${escape(d.sourceUrl)}" placeholder="https://" />`)}`}
     <p class="form-msg msg-error" id="form-error" role="alert" hidden></p>
     <div class="editor-foot">
       <button class="btn btn-primary" type="submit">Save</button>
@@ -196,6 +218,13 @@ export function readForm(form) {
     d.minutes = numOrNull('minutes');
     if (val('equipment') !== undefined) d.equipment = val('equipment');
     if (val('exercises') !== undefined) d.blocks = parseWorkoutBlocks(val('exercises'));
+  } else if (d.type === 'task') {
+    if (val('due') !== undefined) d.due = val('due');
+    if (val('repeat') !== undefined) d.repeat = val('repeat');
+    if (val('list') !== undefined) d.list = val('list').trim();
+    d.important = f.has('important');
+    if (val('steps') !== undefined) d.steps = parseSteps(val('steps'), d.steps);
+    if (d.repeat && !d.due) d.due = todayISO();
   } else {
     if (val('category') !== undefined) d.category = val('category');
     if (val('body') !== undefined) d.body = val('body');
