@@ -1,0 +1,4 @@
+// Works out a recipe's cuisine from its tags, so recipes you add get one too when tagged.
+export const CUISINES = ['American', 'Brazilian', 'British', 'Cajun', 'Chinese', 'Chinese American', 'Creole', 'Cuban', 'Egyptian', 'Ethiopian', 'Filipino', 'French', 'German', 'Greek', 'Hawaiian', 'Hungarian', 'Indian', 'Indonesian', 'Italian', 'Italian American', 'Jamaican', 'Japanese', 'Korean', 'Lao', 'Latin American', 'Levantine', 'Malaysian', 'Mexican', 'Middle Eastern', 'Moroccan', 'Nigerian', 'North African', 'Pakistani', 'Peruvian', 'Russian', 'Senegalese', 'Singaporean', 'South African', 'Southern US', 'Spanish', 'Taiwanese', 'Tex-Mex', 'Thai', 'Turkish', 'Vietnamese', 'West African'];
+const byLower = new Map(CUISINES.map(c => [c.toLowerCase(), c]));
+export const cuisineOf = item => (item.tags || []).map(t => byLower.get(String(t).toLowerCase())).find(Boolean) || '';

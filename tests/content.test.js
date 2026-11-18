@@ -41,3 +41,13 @@ test('the high-protein budget collection has 100+ recipes with real, credited ph
     assert.ok(r.cost.total / r.servings <= 4, `${r.id} is low cost`);
   }
 });
+
+test('recipes get a cuisine from their tags, and every built-in recipe has one', async () => {
+  const { cuisineOf } = await import('../shared/cuisine.js');
+  assert.equal(cuisineOf({ tags: ['dinner', 'korean'] }), 'Korean');
+  assert.equal(cuisineOf({ tags: ['Quick'] }), '');
+  const { proteinRecipes } = await import('../data/protein/index.js');
+  for (const r of proteinRecipes) assert.ok(cuisineOf(r), `${r.id} has a known cuisine`);
+  const asian = proteinRecipes.filter(r => ['Japanese', 'Chinese', 'Chinese American', 'Taiwanese', 'Korean', 'Vietnamese'].includes(cuisineOf(r)));
+  assert.ok(asian.length >= 120);
+});

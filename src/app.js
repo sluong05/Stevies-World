@@ -177,6 +177,7 @@ document.addEventListener('change', async event => {
   const el = event.target;
   const action = el.dataset.action;
   if (action === 'sort') { ui.sort[el.dataset.key] = el.value; render({ keepScroll: true }); }
+  if (action === 'cuisine') { ui.cuisine[el.dataset.key] = el.value; render({ keepScroll: true }); }
   if (action === 'auto-night') { setAutoNight(el.checked); render({ keepScroll: true }); }
   if (action === 'photo' && el.files?.[0]) {
     readForm(el.form);

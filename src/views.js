@@ -4,9 +4,10 @@ import { scenery } from './scenery.js';
 import { activeTheme } from './theme.js';
 import { todoShelf, taskView } from './todo.js';
 import { dueLabel } from '../shared/tasks.js';
+import { cuisineOf } from '../shared/cuisine.js';
 
 const SECTION = { recipe: { path: 'recipes', name: 'Recipes', icon: 'bowl' }, workout: { path: 'workouts', name: 'Workouts', icon: 'dumbbell' }, note: { path: 'notes', name: 'Notes', icon: 'leaf' }, task: { path: 'todo', name: 'To-do', icon: 'checkbox' } };
-export const ui = { query: '', filters: { recipes: 'All', workouts: 'All', notes: 'All' }, quick: { recipes: '', workouts: '' }, sort: { recipes: 'new' } };
+export const ui = { query: '', filters: { recipes: 'All', workouts: 'All', notes: 'All' }, quick: { recipes: '', workouts: '' }, sort: { recipes: 'new' }, cuisine: { recipes: 'All' } };
 
 const newest = (a, b) => (b.updatedAt || 0) - (a.updatedAt || 0);
 const protein = i => i.nutrition?.protein ?? null;
@@ -120,6 +121,10 @@ export function listView(type) {
   const active = ui.filters[key];
   if (active === 'Favorites') items = items.filter(i => isSaved(i.id));
   else if (active !== 'All') items = items.filter(i => categoryOf(i) === active);
+  const cuisines = type === 'recipe' ? [...new Set(byType(type).map(cuisineOf).filter(Boolean))].sort() : [];
+  if (!['All', ...cuisines].includes(ui.cuisine[key])) ui.cuisine[key] = 'All';
+  const cuisine = ui.cuisine[key] || 'All';
+  if (cuisine !== 'All') items = items.filter(i => cuisineOf(i) === cuisine);
   if (ui.query.trim()) items = search(ui.query, items);
   const quick = ui.quick[key];
   if (quick === 'fast') items = items.filter(i => i.minutes && i.minutes <= 30);
@@ -128,11 +133,11 @@ export function listView(type) {
   if (quick === 'noequip') items = items.filter(i => !i.equipment || /bodyweight/i.test(i.equipment));
   const sort = ui.sort[key] || 'new';
   const byCost = (a, b) => (costPerServing(a) ?? Infinity) - (costPerServing(b) ?? Infinity) || a.title.localeCompare(b.title);
-  items.sort(sort === 'cost' ? byCost : sort === 'quick' ? (a, b) => (a.minutes || 9999) - (b.minutes || 9999) : sort === 'protein' ? (a, b) => (protein(b) ?? -1) - (protein(a) ?? -1) : sort === 'az' ? (a, b) => a.title.localeCompare(b.title) : newest);
+  items.sort(sort === 'cost' ? byCost : sort === 'quick' ? (a, b) => (a.minutes || 9999) - (b.minutes || 9999) : sort === 'protein' ? (a, b) => (protein(b) ?? -1) - (protein(a) ?? -1) : sort === 'az' ? (a, b) => a.title.localeCompare(b.title) : sort === 'cuisine' ? (a, b) => (cuisineOf(a) || '~').localeCompare(cuisineOf(b) || '~') || a.title.localeCompare(b.title) : newest);
   const quickChips = type === 'recipe'
     ? [['fast', '30 min or less'], ['protein', '30 g+ protein']]
     : type === 'workout' ? [['short', '30 min or less'], ['noequip', 'No equipment']] : [];
-  const sorts = type === 'recipe' ? [['new', 'Newest'], ['quick', 'Quickest'], ['protein', 'Most protein'], ['cost', 'Lowest cost'], ['az', 'A to Z']] : [['new', 'Newest'], ['az', 'A to Z'], ...(type === 'workout' ? [['quick', 'Shortest']] : [])];
+  const sorts = type === 'recipe' ? [['new', 'Newest'], ['quick', 'Quickest'], ['protein', 'Most protein'], ['cost', 'Lowest cost'], ['cuisine', 'Cuisine'], ['az', 'A to Z']] : [['new', 'Newest'], ['az', 'A to Z'], ...(type === 'workout' ? [['quick', 'Shortest']] : [])];
   return `<section class="page-head">
       <h1>${sec.name}</h1>
       <div class="page-actions">
@@ -147,6 +152,7 @@ export function listView(type) {
       </div>
       <div class="chips chips-secondary">
         ${quickChips.map(([v, label]) => `<button class="chip chip-outline ${quick === v ? 'on' : ''}" data-action="quick" data-key="${key}" data-value="${v}" aria-pressed="${quick === v}">${label}</button>`).join('')}
+        ${cuisines.length ? `<label class="sort">Cuisine<select data-action="cuisine" data-key="${key}"><option value="All">All</option>${cuisines.map(c => `<option value="${escape(c)}" ${c === cuisine ? 'selected' : ''}>${escape(c)} (${byType(type).filter(i => cuisineOf(i) === c).length})</option>`).join('')}</select></label>` : ''}
         <label class="sort">Sort<select data-action="sort" data-key="${key}">${sorts.map(([v, l]) => `<option value="${v}" ${v === sort ? 'selected' : ''}>${l}</option>`).join('')}</select></label>
       </div>
     </div>
