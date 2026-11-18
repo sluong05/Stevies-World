@@ -1,5 +1,8 @@
 // Your cookbook recipes and the healthy-living guides, converted to the library item shape.
-import { recipes, articles } from '../data/cookbook.js';
+import { recipes as cookbookRecipes, articles } from '../data/cookbook.js';
+import { proteinRecipes } from '../data/protein/index.js';
+
+const recipes = [...cookbookRecipes, ...proteinRecipes];
 
 const photo = p => p && ({
   src: p.src === '/assets/beef-udon.png' ? '/assets/beef-udon.jpg' : p.src,

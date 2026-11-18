@@ -2,7 +2,7 @@
 
 My recipes, workouts and notes in one place, built to open fast on my phone.
 
-- **Recipes**: your cookbook recipes (Chicken Katsu Curry, Beef Udon, Thai Tea, Shu Mai) plus anything you add. Cook mode shows one step at a time in big text and keeps the screen awake.
+- **Recipes**: your cookbook recipes (Chicken Katsu Curry, Beef Udon, Thai Tea, Shu Mai) plus 109 high-protein, low-cost recipes from 44 cuisines (each with a real dish photo, protein and cost estimates), plus anything you add. Cook mode shows one step at a time in big text and keeps the screen awake.
 - **Workouts**: saved routines with sections, sets, reps and rest. Start workout goes one exercise at a time and has a rest timer.
 - **To-do**: type a to-do and press Add. Shortcuts set the details as you type, like "call dentist friday #health !". Each to-do has a main subject plus optional notes, steps you tick off one by one, a due date, a repeat, a list and a star for important. It's sorted into Overdue, Today, Next 7 days, Later and No date, and today's to-dos also show on the home screen. Finishing a repeating to-do schedules the next one.
 - **Notes**: anything else, like sizes, gear, routines or links. The five healthy-living guides live here.

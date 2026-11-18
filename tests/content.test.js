@@ -27,5 +27,17 @@ test('every built-in item passes the same checks as items you add', () => {
 });
 
 test('built-in photos exist on disk', async () => {
-  for (const item of builtins.filter(i => i.photo)) await access(new URL(`..${item.photo.src}`, import.meta.url));
+  for (const item of builtins.filter(i => i.photo?.src.startsWith('/'))) await access(new URL(`..${item.photo.src}`, import.meta.url));
+});
+
+test('the high-protein budget collection has 100+ recipes with real, credited photos and estimates', async () => {
+  const { proteinRecipes } = await import('../data/protein/index.js');
+  assert.ok(proteinRecipes.length >= 100);
+  assert.ok(new Set(proteinRecipes.map(r => r.tags[2])).size >= 30, 'variety of cuisines');
+  for (const r of proteinRecipes) {
+    assert.match(r.photo.src, /^https:\/\/commons\.wikimedia\.org\/wiki\/Special:FilePath\//, r.id);
+    assert.ok(r.photo.author && r.photo.license && r.photo.sourceUrl, `${r.id} photo is credited`);
+    assert.ok(r.nutrition.protein >= 19, `${r.id} is high protein`);
+    assert.ok(r.cost.total / r.servings <= 4, `${r.id} is low cost`);
+  }
 });
