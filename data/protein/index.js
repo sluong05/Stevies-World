@@ -4,5 +4,9 @@ import asia2 from './asia-2.js';
 import americas from './americas.js';
 import mideastAfrica from './mideast-africa.js';
 import europe from './europe.js';
+import japanese from './japanese.js';
+import chinese from './chinese.js';
+import korean from './korean.js';
+import vietnamese from './vietnamese.js';
 
-export const proteinRecipes = [...asia1, ...asia2, ...americas, ...mideastAfrica, ...europe];
+export const proteinRecipes = [...asia1, ...asia2, ...americas, ...mideastAfrica, ...europe, ...japanese, ...chinese, ...korean, ...vietnamese];
