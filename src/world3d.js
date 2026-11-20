@@ -5,10 +5,12 @@
 // Signs are real links laid over the canvas, so everything still works by keyboard and
 // screen reader, and the page keeps a plain list of doors in case WebGL is unavailable.
 import * as THREE from '../vendor/three.module.min.js';
-import { byType, getItem, isSaved, search, toggleSaved } from './store.js';
+import { byType, getItem, isSaved, search, toggleSaved, syncState } from './store.js';
 import { toggleTask, toggleStar, quickAdd } from './todo.js';
 import { groupTasks, dueLabel, todayISO } from '../shared/tasks.js';
 import { toast } from './ui.js';
+import { editing } from './editor.js';
+import { THEMES, chosenTheme, autoNight } from './theme.js';
 
 const reduced = typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches;
 let renderer = null, failed = false;
@@ -239,10 +241,10 @@ function livingRoom(night) {
   const table = new THREE.Group();
   box(1.2, 0.08, 0.7, 0x8a5a3a, 0, 0.42, 0, table);
   [[-0.5, -0.28], [0.5, -0.28], [-0.5, 0.28], [0.5, 0.28]].forEach(([x, z]) => box(0.06, 0.4, 0.06, 0x6b4430, x, 0.2, z, table));
-  const mug = cyl(0.07, 0.06, 0.13, 0xf6efe0, 0.25, 0.53, 0.05, table, 12);
+  const mug = cyl(0.07, 0.06, 0.13, 0xf6efe0, 0.48, 0.53, -0.2, table, 12);
   box(0.32, 0.05, 0.24, 0x3a6a8a, -0.25, 0.48, 0, table); box(0.3, 0.04, 0.22, 0xc4513f, -0.24, 0.52, 0.01, table);
   table.position.set(0, 0, -1.5); scene.add(table);
-  const steam = smoke(scene, new THREE.Vector3(0.25, 0.62, -1.45), 5);
+  const steam = smoke(scene, new THREE.Vector3(0.48, 0.62, -1.7), 5);
   const lamp = new THREE.Group();
   cyl(0.18, 0.2, 0.04, 0x3a3a3a, 0, 0.02, 0, lamp); cyl(0.02, 0.02, 1.6, 0x3a3a3a, 0, 0.8, 0, lamp);
   const shade = cyl(0.18, 0.3, 0.32, 0xf4e2b8, 0, 1.7, 0, lamp, 16);
@@ -291,21 +293,37 @@ function livingRoom(night) {
 
   // a notepad on the coffee table (Add) and a light switch by the gym door (Settings)
   const pad = new THREE.Group();
-  box(0.34, 0.025, 0.44, 0xfffdf3, 0, 0, 0, pad); box(0.34, 0.03, 0.05, 0xc4513f, 0, 0.005, -0.2, pad);
-  for (let i = 0; i < 5; i++) box(0.24, 0.003, 0.01, 0x9ab0c8, 0, 0.014, -0.1 + i * 0.065, pad);
-  const pen = cyl(0.012, 0.012, 0.3, 0x3a6a8a, 0.22, 0.02, 0, pad, 6); pen.rotation.x = Math.PI / 2;
-  pad.position.set(0.05, 0.475, -1.62); pad.rotation.y = -0.25; scene.add(pad);
-  spots.push({ label: 'Add', sub: 'Notepad', href: '#/add', pos: new THREE.Vector3(0.05, 0.85, -1.62), target: new THREE.Vector3(0.05, 1.2, -0.6), mesh: pad });
+  box(0.56, 0.72, 0.03, 0x7a4e33, 0, 0, -0.02, pad); box(0.56, 0.06, 0.05, 0xc4513f, 0, 0.36, 0, pad);
+  const addPanel = makePanel(0.5, 0.64, 640, 820);
+  pad.add(addPanel.mesh); addPanel.mesh.position.set(0, -0.01, 0.001);
+  const stand = box(0.06, 0.4, 0.06, 0x6b4430, 0, -0.1, -0.2, pad); stand.rotation.x = 0.7;
+  pad.position.set(0.05, 0.78, -1.62); pad.rotation.x = -0.55; scene.add(pad); pad.updateMatrixWorld(true);
+  spots.push({ label: 'Add', sub: 'Notepad', href: '#/add', pos: pad.localToWorld(new THREE.Vector3(0, 0.48, 0)), target: new THREE.Vector3(0.05, 1.2, -0.6), mesh: pad, here: true });
+  // the house panel on the wall behind you (Settings), switched on by the light switch
+  const sp = new THREE.Group();
+  box(1.12, 1.62, 0.04, 0x7a4e33, 0, 0, 0, sp);
+  const setPanel = makePanel(1.0, 1.5, 640, 960);
+  sp.add(setPanel.mesh); setPanel.mesh.position.z = 0.025;
+  sp.position.y = 1.65; onWall(sp, 'front', -2.6, W, D); scene.add(sp);
   const sw = new THREE.Group();
   box(0.16, 0.26, 0.02, 0xf6efe0, 0, 0, 0.01, sw); box(0.05, 0.09, 0.03, night ? 0xd8d2c4 : 0xffffff, 0, night ? -0.03 : 0.03, 0.03, sw);
-  // a bigger invisible pad so the switch is easy to tap
   const swHit = new THREE.Mesh(new THREE.PlaneGeometry(0.6, 0.7), new THREE.MeshBasicMaterial({ visible: false })); swHit.position.z = 0.04; sw.add(swHit);
   sw.position.y = 1.3; onWall(sw, 'right', -1.0, W, D); scene.add(sw); sw.updateMatrixWorld(true);
-  spots.push({ label: 'Settings', sub: 'Light switch', href: '#/settings', pos: sw.localToWorld(new THREE.Vector3(0, 0.25, 0.05)), target: sw.localToWorld(new THREE.Vector3(0, -0.1, 1.2)), mesh: sw });
+  spots.push({ label: 'Settings', sub: 'Light switch', href: '#/settings', pos: sw.localToWorld(new THREE.Vector3(0, 0.25, 0.05)), target: sw.localToWorld(new THREE.Vector3(0, -0.1, 1.2)), mesh: sw, here: true });
+  scene.updateMatrixWorld(true);
+  const lpanels = { notepad: addPanel, panel: setPanel };
 
+  let lblink = 0;
   return {
     scene, spots, eye: new THREE.Vector3(0, 1.65, 3.4), yawCenter: Math.PI, yawRange: 1.55, pitch: -0.14,
+    focus: { notepad: focusOf(addPanel.mesh), panel: focusOf(setPanel.mesh) },
+    panels: lpanels,
+    refresh() { addPanel.dirty = true; setPanel.dirty = true; },
     update(dt, t) {
+      const b = Math.floor(t * 2);
+      if (b !== lblink && [addInput, passInput].includes(document.activeElement)) { lblink = b; addPanel.dirty = setPanel.dirty = true; }
+      if (addPanel.dirty) { addPanel.dirty = false; drawAdd(addPanel, night); }
+      if (setPanel.dirty) { setPanel.dirty = false; drawSettings(setPanel, night); }
       flame.forEach((f, i) => { f.scale.y = 1 + Math.sin(t * 9 + i * 2) * 0.18; f.scale.x = 1 + Math.sin(t * 7 + i) * 0.08; });
       fireLight.intensity = (night ? 6 : 3) * (0.85 + Math.sin(t * 11) * 0.08 + Math.sin(t * 5.3) * 0.07);
       bulbs.forEach((b, i) => b.material.color.setHSL(0.11, 1, 0.6 + Math.sin(t * 2 + i) * 0.12));
@@ -440,7 +458,7 @@ function gym(night) {
     update(dt, t) {
       const b = Math.floor(t * 2);
       if (b !== blink && document.activeElement === searchInput) { blink = b; wbPanel.dirty = true; }
-      if (wbPanel.dirty) { wbPanel.dirty = false; drawGym(wbPanel, night); }
+      if (wbPanel.dirty) { wbPanel.dirty = false; const it = detailId && getItem(detailId); if (it?.type === 'workout') drawWorkout(wbPanel, it); else drawGym(wbPanel, night); }
       bagPivot.rotation.z = Math.sin(t * 1.1) * 0.06; bagPivot.rotation.x = Math.sin(t * 0.8) * 0.04;
       hand2.parent.rotation.z = 0; hand2.rotation.z = -t; hand2.position.set(Math.sin(t) * 0.07, Math.cos(t) * 0.07, 0.02);
       void chain; void bag; void hand;
@@ -521,7 +539,7 @@ function drawTodo(p, night) {
   if (typing && Math.floor(performance.now() / 500) % 2) { const cx = 48 + (val ? g.measureText(shown).width : 0) + 2; g.fillStyle = accent; g.fillRect(cx, 248, 3, 40); }
   g.fillStyle = accent; rr(g, W - 140, 242, 104, 52, 26); g.fill();
   g.fillStyle = night ? '#1a2238' : '#fffdf3'; g.font = `600 28px ${FONT}`; g.textAlign = 'center'; g.fillText('Add', W - 88, 269); g.textAlign = 'left';
-  p.hits.push({ x: 24, y: 230, w: W - 180, h: 76, fn: () => focusDesk() });
+  p.hits.push({ x: 24, y: 230, w: W - 180, h: 76, fn: () => focusDesk(), keep: true });
   p.hits.push({ x: W - 150, y: 230, w: 126, h: 76, fn: () => submitDesk() });
   // list
   const top = 330, bottom = H - 16;
@@ -680,7 +698,7 @@ function drawGym(p, night) {
   g.fillText(shown, 94, 210);
   if (typing && Math.floor(performance.now() / 500) % 2) { g.fillStyle = blue; g.fillRect(94 + (val ? g.measureText(shown).width : 0) + 2, 190, 3, 38); }
   if (val) { g.fillStyle = soft; g.font = `600 30px ${FONT}`; g.fillText('×', W - 66, 208); p.hits.push({ x: W - 96, y: 176, w: 72, h: 66, fn: () => { searchInput.value = ''; } }); }
-  p.hits.push({ x: 24, y: 176, w: W - 120, h: 66, fn: () => focusSearch() });
+  p.hits.push({ x: 24, y: 176, w: W - 120, h: 66, fn: () => focusSearch(), keep: true });
   // filter chips (wrap)
   const cats = ['All', 'Favorites', ...[...new Set(all.map(i => i.focus || 'Other'))].sort()];
   if (!cats.includes(gymState.filter)) gymState.filter = 'All';
@@ -733,6 +751,181 @@ function drawGym(p, night) {
   if (p.maxScroll > 0) { const frac = (bottom - top) / (bottom - top + p.maxScroll); const bh = (bottom - top) * frac; g.fillStyle = 'rgba(0,0,0,.15)'; rr(g, W - 12, top + (bottom - top - bh) * (p.scroll / p.maxScroll), 6, bh, 3); g.fill(); }
   // marker tray hint
   g.fillStyle = soft; g.font = `400 22px ${FONT}`; g.textBaseline = 'alphabetic'; g.fillText(p.maxScroll > 0 ? 'Drag up and down to see more' : '', 28, H - 26);
+  p.tex.needsUpdate = true;
+}
+
+// ---------- proxies: the flat page stays in the DOM (hidden), and 3D buttons press its controls ----------
+const fb = sel => document.querySelector(`.room-fallback ${sel}`);
+const press = sel => { const el = fb(sel); if (el) el.click(); return !!el; };
+
+function caretText(g, x, y, val, placeholder, input, maxW, color, softc, mask = false) {
+  const typing = document.activeElement === input;
+  const shown = ellipsis(g, mask && val ? '•'.repeat(val.length) : (val || placeholder), maxW);
+  g.fillStyle = val ? color : softc; g.fillText(shown, x, y);
+  if (typing && Math.floor(performance.now() / 500) % 2) { g.fillStyle = color; g.fillRect(x + (val ? g.measureText(shown).width : 0) + 2, y - 20, 3, 38); }
+  return typing;
+}
+function pill(p, x, y, w, h, label, { fill, stroke, text, fn, keep = false, font = 26 }) {
+  const g = p.g;
+  if (fill) { g.fillStyle = fill; rr(g, x, y, w, h, h / 2); g.fill(); }
+  if (stroke) { g.lineWidth = 3; g.strokeStyle = stroke; rr(g, x, y, w, h, h / 2); g.stroke(); }
+  g.fillStyle = text; g.font = `600 ${font}px ${FONT}`; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText(label, x + w / 2, y + h / 2 + 1); g.textAlign = 'left';
+  if (fn) p.hits.push({ x, y, w, h, fn, keep });
+}
+
+// Add: a notepad on a little stand on the coffee table.
+const addState = { type: '' };
+function drawAdd(p, night) {
+  const { g, canvas } = p, W = canvas.width, H = canvas.height;
+  const ink = '#2c3a2b', soft = '#7a8574', green = '#3f6e3c', red = '#c4513f';
+  g.fillStyle = '#fffdf3'; g.fillRect(0, 0, W, H);
+  g.strokeStyle = '#d7e3ef'; g.lineWidth = 2; for (let y = 120; y < H; y += 46) { g.beginPath(); g.moveTo(0, y); g.lineTo(W, y); g.stroke(); }
+  g.strokeStyle = '#f0b8b0'; g.beginPath(); g.moveTo(70, 0); g.lineTo(70, H); g.stroke();
+  p.hits = [];
+  pill(p, 90, 18, 200, 54, '← Living room', { stroke: green, text: green, fn: () => { location.hash = '#/'; } });
+  g.fillStyle = ink; g.font = `500 50px ${HEAD}`; g.textBaseline = 'alphabetic'; g.fillText('Add something', 90, 128);
+  const st = editing.importState;
+  // the paste box
+  g.fillStyle = '#ffffff'; rr(g, 90, 150, W - 120, 130, 18); g.fill();
+  g.lineWidth = 3; g.strokeStyle = document.activeElement === addInput ? green : '#d9d2bd'; g.stroke();
+  g.font = `400 26px ${FONT}`; g.textBaseline = 'middle';
+  const val = addInput?.value || '';
+  const lines = val ? wrap(g, val, W - 170, 3) : [''];
+  if (!val) caretText(g, 110, 190, '', 'Paste a TikTok, Instagram, YouTube or recipe link…', addInput, W - 160, ink, soft);
+  else lines.forEach((l, i) => { g.fillStyle = ink; g.fillText(l, 110, 186 + i * 36); });
+  if (val && document.activeElement === addInput && Math.floor(performance.now() / 500) % 2) { const last = lines[lines.length - 1]; g.fillStyle = green; g.fillRect(110 + g.measureText(last).width + 2, 168 + (lines.length - 1) * 36, 3, 34); }
+  p.hits.push({ x: 90, y: 150, w: W - 120, h: 130, fn: () => focusTyper(addInput), keep: true });
+  let y = 300;
+  if (st.error) { g.fillStyle = st.needsText ? green : red; g.font = `400 22px ${FONT}`; g.textBaseline = 'alphabetic'; wrap(g, st.error, W - 130, 3).forEach((l, i) => g.fillText(l, 92, y + 20 + i * 30)); y += 24 + Math.min(3, wrap(g, st.error, W - 130, 3).length) * 30; }
+  // it's a…
+  g.fillStyle = soft; g.font = `600 22px ${FONT}`; g.textBaseline = 'alphabetic'; g.fillText('IT’S A…', 92, y + 22); y += 36;
+  let x = 90;
+  [['', 'Let it guess'], ['recipe', 'Recipe'], ['workout', 'Workout'], ['note', 'Note']].forEach(([v, l]) => {
+    g.font = `600 24px ${FONT}`; const w = g.measureText(l).width + 36;
+    if (x + w > W - 20) { x = 90; y += 58; }
+    const on = addState.type === v;
+    pill(p, x, y, w, 48, l, { fill: on ? green : null, stroke: green, text: on ? '#fffdf3' : green, fn: () => { addState.type = v; }, font: 24 });
+    x += w + 10;
+  });
+  y += 72;
+  pill(p, 90, y, 170, 62, 'Paste', { stroke: green, text: green, keep: true, fn: async () => {
+    try { const t = await navigator.clipboard.readText(); if (t) { addInput.value = t; p.dirty = true; wake(); } } catch { focusTyper(addInput); toast('Tap the box and paste'); }
+  } });
+  pill(p, 276, y, W - 306, 62, st.busy ? 'Reading…' : st.needsText ? 'Use this text' : 'Import', { fill: green, text: '#fffdf3', fn: () => {
+    const ta = fb('#import-input'); const form = fb('form[data-form="import"]');
+    if (!ta || !form || st.busy) return;
+    ta.value = addInput.value;
+    const radio = fb(`input[name="type"][value="${addState.type}"]`); if (radio) radio.checked = true;
+    form.requestSubmit();
+  } });
+  y += 96;
+  g.fillStyle = soft; g.font = `600 22px ${FONT}`; g.textBaseline = 'alphabetic'; g.fillText('OR START FROM SCRATCH', 92, y); y += 18;
+  const bw = (W - 130) / 2;
+  [['recipe', 'Recipe'], ['workout', 'Workout'], ['note', 'Note'], ['task', 'To-do']].forEach(([t, l], i) => {
+    pill(p, 90 + (i % 2) * (bw + 10), y + Math.floor(i / 2) * 70, bw, 58, `+ ${l}`, { stroke: '#c89a5a', fill: '#fff6e0', text: '#7a4e33', fn: () => { location.hash = `#/new/${t}`; } });
+  });
+  p.tex.needsUpdate = true;
+}
+
+// Settings: the house panel on the living-room wall.
+function drawSettings(p, night) {
+  const { g, canvas } = p, W = canvas.width, H = canvas.height;
+  const ink = '#2c2418', soft = '#7a6a55', brass = '#b88a4a', green = '#3f6e3c';
+  const bg = g.createLinearGradient(0, 0, 0, H); bg.addColorStop(0, '#f6ead2'); bg.addColorStop(1, '#ead9b8');
+  g.fillStyle = bg; g.fillRect(0, 0, W, H);
+  p.hits = [];
+  pill(p, 24, 20, 200, 54, '← Living room', { stroke: green, text: green, fn: () => { location.hash = '#/'; } });
+  g.fillStyle = ink; g.font = `500 52px ${HEAD}`; g.textBaseline = 'alphabetic'; g.fillText('Settings', 28, 130);
+  const section = (label, y) => { g.fillStyle = soft; g.font = `700 21px ${FONT}`; g.fillText(label.toUpperCase(), 30, y); g.fillStyle = brass; g.fillRect(30, y + 10, W - 60, 2); };
+  // themes: brass switches
+  section('Look', 178);
+  const current = chosenTheme();
+  const tw = (W - 78) / 2;
+  THEMES.forEach((t, i) => {
+    const x = 30 + (i % 2) * (tw + 18), y = 204 + Math.floor(i / 2) * 92;
+    const on = t.id === current;
+    g.fillStyle = on ? '#fffaf0' : 'rgba(255,255,255,.45)'; rr(g, x, y, tw, 78, 16); g.fill();
+    g.lineWidth = on ? 4 : 2; g.strokeStyle = on ? green : '#d4c19c'; g.stroke();
+    g.fillStyle = on ? green : '#cbb894'; g.beginPath(); g.arc(x + 32, y + 39, 13, 0, 7); g.fill();
+    g.fillStyle = ink; g.font = `600 25px ${FONT}`; g.textBaseline = 'middle'; g.fillText(ellipsis(g, t.name, tw - 70), x + 58, y + 40);
+    p.hits.push({ x, y, w: tw, h: 78, fn: () => press(`[data-action="theme"][data-value="${t.id}"]`) });
+  });
+  let y = 204 + Math.ceil(THEMES.length / 2) * 92 + 6;
+  const an = autoNight();
+  g.fillStyle = an ? green : '#cbb894'; rr(g, 30, y, 74, 40, 20); g.fill();
+  g.fillStyle = '#fff'; g.beginPath(); g.arc(an ? 84 : 50, y + 20, 15, 0, 7); g.fill();
+  g.fillStyle = ink; g.font = `400 23px ${FONT}`; g.textBaseline = 'middle';
+  wrap(g, 'Firefly night when my phone is in dark mode', W - 150, 2).forEach((l, i) => g.fillText(l, 120, y + 12 + i * 28));
+  p.hits.push({ x: 24, y: y - 6, w: W - 48, h: 60, fn: () => press('[data-action="auto-night"]') });
+  // sync
+  y += 100; section('Sync', y); y += 44;
+  const sy = syncState();
+  const status = sy.reason === 'checking' ? 'Checking…' : !sy.available ? 'Sync isn’t available here. Everything stays on this device.' : !sy.hasPasscode ? 'Enter your passcode to sync your phone and laptop.' : sy.error || `Synced${sy.lastSynced ? ` at ${new Date(sy.lastSynced).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}` : ''}.${sy.pending ? ` ${sy.pending} waiting.` : ''}`;
+  g.fillStyle = sy.connected && !sy.error ? green : soft; g.font = `400 23px ${FONT}`; g.textBaseline = 'alphabetic';
+  wrap(g, status, W - 60, 3).forEach((l, i) => { g.fillText(l, 30, y + i * 30); });
+  y += Math.min(3, wrap(g, status, W - 60, 3).length) * 30 + 6;
+  if (sy.available) {
+    g.fillStyle = '#fffaf0'; rr(g, 30, y, W - 220, 60, 30); g.fill(); g.lineWidth = 3; g.strokeStyle = document.activeElement === passInput ? green : '#d4c19c'; g.stroke();
+    g.font = `400 24px ${FONT}`; g.textBaseline = 'middle';
+    caretText(g, 54, y + 31, passInput?.value || '', sy.hasPasscode ? 'New passcode' : 'Passcode', passInput, W - 270, ink, soft, true);
+    p.hits.push({ x: 30, y, w: W - 220, h: 60, fn: () => focusTyper(passInput), keep: true });
+    pill(p, W - 180, y, 150, 60, sy.hasPasscode ? 'Update' : 'Connect', { fill: green, text: '#fff', fn: () => {
+      const inp = fb('form[data-form="passcode"] input[name="passcode"]'); const form = fb('form[data-form="passcode"]');
+      if (!inp || !form || !passInput.value) { focusTyper(passInput); return; }
+      inp.value = passInput.value; passInput.value = ''; form.requestSubmit();
+    } });
+    y += 76;
+    if (sy.hasPasscode) {
+      pill(p, 30, y, 200, 54, 'Sync now', { stroke: green, text: green, fn: () => press('[data-action="sync-now"]') });
+      pill(p, 244, y, W - 274, 54, 'Sign out here', { stroke: soft, text: soft, fn: () => press('[data-action="forget-pass"]') });
+      y += 70;
+    }
+  }
+  // backups
+  y += 18; section('Backups', y); y += 30;
+  pill(p, 30, y, (W - 74) / 2, 58, 'Download', { stroke: brass, fill: '#fff6e0', text: '#7a4e33', fn: () => press('[data-action="export"]') });
+  pill(p, 44 + (W - 74) / 2, y, (W - 74) / 2, 58, 'Load a backup', { stroke: brass, fill: '#fff6e0', text: '#7a4e33', fn: () => press('input[data-action="import-file"]') });
+  p.maxScroll = 0;
+  p.tex.needsUpdate = true;
+}
+
+// A single workout, written up on the gym whiteboard.
+function drawWorkout(p, it) {
+  const { g, canvas } = p, W = canvas.width, H = canvas.height;
+  const ink = '#24303a', soft = '#6a7680', blue = '#2f5f9a', red = '#c4513f', green = '#3f7a3c';
+  g.fillStyle = '#fbfcfd'; g.fillRect(0, 0, W, H);
+  p.hits = [];
+  pill(p, 24, 22, 230, 56, '← All workouts', { stroke: green, text: green, fn: () => { location.hash = '#/workouts'; } });
+  const saved = isSaved(it.id);
+  pill(p, W - 236, 22, 100, 56, saved ? '♥' : '♡', { stroke: red, fill: saved ? red : null, text: saved ? '#fff' : red, font: 34, fn: () => toggleSaved(it.id).then(on => toast(on ? 'Added to favorites' : 'Removed from favorites')) });
+  pill(p, W - 124, 22, 100, 56, 'Edit', { stroke: blue, text: blue, fn: () => { location.hash = `#/edit/${encodeURIComponent(it.id)}`; } });
+  const top = 96, bottom = H - 100;
+  g.save(); g.beginPath(); g.rect(0, top, W, bottom - top); g.clip();
+  let y = top + 60 - p.scroll;
+  g.fillStyle = blue; g.font = `500 54px ${HEAD}`; g.textBaseline = 'alphabetic';
+  wrap(g, it.title, W - 60, 3).forEach(l => { g.fillText(l, 28, y); y += 60; });
+  const n = (it.blocks || []).reduce((k, b) => k + b.exercises.length, 0);
+  const meta = [it.minutes ? `${Math.round(it.minutes)} min` : '', n ? `${n} exercises` : '', it.focus, it.equipment].filter(Boolean).join('  ·  ');
+  g.fillStyle = soft; g.font = `400 25px ${FONT}`; wrap(g, meta, W - 60, 2).forEach(l => { g.fillText(l, 30, y - 10); y += 34; });
+  y += 10;
+  const scheme = e => (e.sets && e.reps ? `${e.sets} × ${e.reps}` : e.reps ? e.reps : e.sets ? `${e.sets} sets` : '');
+  (it.blocks || []).forEach(b => {
+    if (b.name) { g.fillStyle = red; g.font = `700 24px ${FONT}`; g.fillText(`${b.name}${b.rounds ? ` · ${b.rounds} rounds` : ''}`.toUpperCase(), 30, y + 10); y += 46; }
+    b.exercises.forEach(e => {
+      g.fillStyle = ink; g.font = `500 29px ${FONT}`; g.fillText('•', 34, y + 4);
+      const sc = scheme(e); g.font = `600 27px ${FONT}`; const sw = sc ? g.measureText(sc).width : 0;
+      g.fillStyle = blue; if (sc) g.fillText(sc, W - 30 - sw, y + 4);
+      g.fillStyle = ink; g.font = `500 29px ${FONT}`;
+      wrap(g, e.name || '', W - 120 - sw, 2).forEach((l, i) => { g.fillText(l, 62, y + 4 + i * 36); if (i) y += 36; });
+      if (e.note) { y += 32; g.fillStyle = soft; g.font = `400 23px ${FONT}`; g.fillText(ellipsis(g, e.note, W - 100), 62, y + 4); }
+      y += 48;
+    });
+    y += 10;
+  });
+  if (it.notes || it.body) { g.fillStyle = soft; g.font = `400 24px ${FONT}`; wrap(g, plainText(it.notes || it.body), W - 60).forEach(l => { g.fillText(l, 30, y); y += 32; }); }
+  g.restore();
+  p.maxScroll = Math.max(0, y + p.scroll - bottom + 20);
+  pill(p, 24, H - 88, W - 48, 70, '▶  Start workout', { fill: green, text: '#fff', font: 30, fn: () => { location.hash = `#/item/${encodeURIComponent(it.id)}/go`; } });
   p.tex.needsUpdate = true;
 }
 
@@ -807,9 +1000,10 @@ function office(night) {
 const ROOMS = { living: livingRoom, kitchen, gym, office };
 
 // ---------- typing on the monitor ----------
-let deskInput = null, searchInput = null;
+let deskInput = null, searchInput = null, addInput = null, passInput = null, detailId = null;
+function focusTyper(el) { el?.focus({ preventScroll: true }); for (const p of Object.values(room?.panels || {})) p.dirty = true; }
 function focusSearch() { searchInput?.focus({ preventScroll: true }); if (room?.panels?.whiteboard) room.panels.whiteboard.dirty = true; }
-const blurTyping = () => { for (const el of [deskInput, searchInput]) if (el && document.activeElement === el) el.blur(); };
+const blurTyping = () => { for (const el of [deskInput, searchInput, addInput, passInput]) if (el && document.activeElement === el) el.blur(); };
 function focusDesk() { deskInput?.focus({ preventScroll: true }); if (room?.panels) room.panels.monitor.dirty = true; }
 async function submitDesk() {
   const text = deskInput?.value.trim();
@@ -843,6 +1037,15 @@ function ensure() {
   searchInput.addEventListener('input', dirtyBoard);
   searchInput.addEventListener('blur', () => { if (room?.panels?.whiteboard) room.panels.whiteboard.dirty = true; });
   searchInput.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); searchInput.blur(); } });
+  addInput = document.createElement('textarea');
+  addInput.className = 'lib-hidden-input'; addInput.id = 'add-input'; addInput.setAttribute('aria-label', 'Paste a link or the caption text'); addInput.autocapitalize = 'off'; addInput.spellcheck = false;
+  passInput = document.createElement('input');
+  passInput.className = 'lib-hidden-input'; passInput.id = 'pass-input'; passInput.type = 'password'; passInput.autocomplete = 'current-password'; passInput.setAttribute('aria-label', 'Sync passcode');
+  document.body.append(addInput, passInput);
+  for (const el of [addInput, passInput]) {
+    el.addEventListener('input', () => { for (const p of Object.values(room?.panels || {})) p.dirty = true; });
+    el.addEventListener('blur', () => { for (const p of Object.values(room?.panels || {})) p.dirty = true; });
+  }
   renderer.domElement.addEventListener('webglcontextlost', e => { e.preventDefault(); failed = true; stop(); document.body.classList.remove('world-live'); document.body.classList.add('world-failed'); });
   addEventListener('resize', () => { resize(); wake(); });
   addEventListener('scroll', onScroll, { passive: true });
@@ -894,7 +1097,7 @@ function tapAt(x, y) {
     for (let i = p.hits.length - 1; i >= 0; i--) {
       const h = p.hits[i];
       if (cx >= h.x && cx <= h.x + h.w && cy >= h.y && cy <= h.y + h.h) {
-        if (h.fn !== undefined && !/focus(Desk|Search)/.test(String(h.fn))) blurTyping();
+        if (!h.keep) blurTyping();
         h.fn(); p.dirty = true; wake(); return;
       }
     }
@@ -1005,7 +1208,7 @@ function disposeRoom() {
 
 // Show a room (or null to hide the house, e.g. on the Library or an item page).
 // focus zooms the camera onto something in the room ('monitor' or 'board' in the office).
-export function show(name, theme, focus = null) {
+export function show(name, theme, focus = null, detail = null) {
   if (!name || theme === 'plain') {
     stop(); disposeRoom(); focusName = null;
     document.body.classList.remove('world-live', 'world-walking');
@@ -1029,10 +1232,13 @@ export function show(name, theme, focus = null) {
     camPos.copy(room.eye); camLook.set(room.eye.x + Math.sin(room.yawCenter), room.eye.y + room.pitch, room.eye.z + Math.cos(room.yawCenter));
     signs.innerHTML = room.spots.map((s, i) => `<a class="sign ${s.back ? 'sign-back' : ''}" data-spot="${i}" href="${s.href}"><strong>${s.back ? '← ' : ''}${s.label}</strong>${s.sub ? `<small>${s.sub}</small>` : ''}</a>`).join('');
   }
-  if (focus !== focusName && room.panels) { for (const p of Object.values(room.panels)) { p.scroll = 0; p.open = null; } }
+  if ((focus !== focusName || detail !== detailId) && room.panels) { for (const p of Object.values(room.panels)) { p.scroll = 0; p.open = null; } }
+  detailId = detail;
   focusName = room.focus?.[focus] ? focus : null;
   if (focusName !== 'monitor' && document.activeElement === deskInput) deskInput.blur();
   if (focusName !== 'whiteboard' && document.activeElement === searchInput) searchInput.blur();
+  if (focusName !== 'notepad' && document.activeElement === addInput) addInput.blur();
+  if (focusName !== 'panel' && document.activeElement === passInput) passInput.blur();
   room.refresh?.();
   resize(); onScroll(); wake();
 }
