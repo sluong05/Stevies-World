@@ -10,6 +10,7 @@ import { toggleTask, toggleStar, quickAdd } from './todo.js';
 import { groupTasks, dueLabel, todayISO } from '../shared/tasks.js';
 import { toast } from './ui.js';
 import { editing } from './editor.js';
+import { mode } from './modes.js';
 import { THEMES, chosenTheme, autoNight } from './theme.js';
 
 const reduced = typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -449,16 +450,17 @@ function gym(night) {
   spots.push({ label: 'Living room', href: '#/', pos: back.localToWorld(new THREE.Vector3(0, 2.52, 0.1)), target: back.localToWorld(new THREE.Vector3(0, 1.2, 0.6)), mesh: back, back: true });
   scene.updateMatrixWorld(true);
   const panels = { whiteboard: wbPanel };
-  let blink = 0;
+  let blink = 0, tick = 0;
   return {
     scene, spots, eye: new THREE.Vector3(0, 1.7, 2.8), yawCenter: Math.PI, yawRange: 1.1, pitch: -0.24,
     focus: { whiteboard: focusOf(wbPanel.mesh) },
     panels,
     refresh() { wbPanel.dirty = true; },
     update(dt, t) {
-      const b = Math.floor(t * 2);
+      const b = Math.floor(t * 4);
       if (b !== blink && document.activeElement === searchInput) { blink = b; wbPanel.dirty = true; }
-      if (wbPanel.dirty) { wbPanel.dirty = false; const it = detailId && getItem(detailId); if (it?.type === 'workout') drawWorkout(wbPanel, it); else drawGym(wbPanel, night); }
+      if (detailId === 'go' && b !== tick) { tick = b; wbPanel.dirty = true; }
+      if (wbPanel.dirty) { wbPanel.dirty = false; const it = detailId && getItem(detailId); if (detailId === 'go') drawTraining(wbPanel); else if (it?.type === 'workout') drawWorkout(wbPanel, it); else drawGym(wbPanel, night); }
       bagPivot.rotation.z = Math.sin(t * 1.1) * 0.06; bagPivot.rotation.x = Math.sin(t * 0.8) * 0.04;
       hand2.parent.rotation.z = 0; hand2.rotation.z = -t; hand2.position.set(Math.sin(t) * 0.07, Math.cos(t) * 0.07, 0.02);
       void chain; void bag; void hand;
@@ -598,10 +600,10 @@ function drawBoard(p, night) {
     g.fillStyle = filled ? '#fffdf3' : '#3f6e3c'; g.font = `600 27px ${FONT}`; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText(label, x + w / 2, y + 29); g.textAlign = 'left';
     p.hits.push({ x, y, w, h: 56, fn });
   };
-  const openNote = p.open && getItem(p.open);
+  const openNote = detailId?.startsWith?.('note:') && getItem(detailId.slice(5));
   if (openNote) {
     paper(30, 30, W - 60, H - 60, '#fffdf3', -0.004); pin(W / 2, 52);
-    button(56, 78, 170, '← Board', () => { p.open = null; p.scroll = 0; p.dirty = true; }, false);
+    button(56, 78, 170, '← Board', () => { location.hash = '#/notes'; }, false);
     button(W - 196, 78, 140, 'Edit', () => { location.hash = `#/edit/${encodeURIComponent(openNote.id)}`; });
     g.fillStyle = '#2c3a2b'; g.font = `500 48px ${HEAD}`; g.textBaseline = 'alphabetic';
     const tl = wrap(g, openNote.title || 'Untitled', W - 140, 3);
@@ -646,7 +648,7 @@ function drawBoard(p, night) {
       g.fillStyle = '#5e6c57'; g.font = `400 23px ${FONT}`;
       wrap(g, plainText(n.body), cw - 44, 6 - tl.length).forEach((l, k) => g.fillText(ellipsis(g, l, cw - 44), x + 22, y + 74 + tl.length * 38 + k * 32));
       if (n.category) { g.fillStyle = '#3f6e3c'; g.font = `600 20px ${FONT}`; g.fillText(ellipsis(g, n.category.toUpperCase(), cw - 44), x + 22, y + ch - 22); }
-      p.hits.push({ x, y, w: cw, h: ch, fn: () => { p.open = n.id; p.scroll = 0; p.dirty = true; } });
+      p.hits.push({ x, y, w: cw, h: ch, fn: () => { location.hash = `#/item/${encodeURIComponent(n.id)}`; } });
     });
     g.restore();
     p.maxScroll = Math.max(0, top + 16 + Math.ceil(cards.length / 2) * (ch + 26) - bottom);
@@ -929,6 +931,123 @@ function drawWorkout(p, it) {
   p.tex.needsUpdate = true;
 }
 
+// ---------- the flat form's own fields, painted in 3D ----------
+// Editing screens keep their real form in the hidden fallback; tapping a field focuses that
+// field (so the phone keyboard, autocorrect and dictation all work) and we paint its value.
+const typingIn = () => document.activeElement?.closest?.('.room-fallback') ? document.activeElement : null;
+document.addEventListener('input', e => { if (e.target.closest?.('.room-fallback')) for (const p of Object.values(room?.panels || {})) p.dirty = true; });
+document.addEventListener('focusout', () => setTimeout(() => { for (const p of Object.values(room?.panels || {})) p.dirty = true; }, 0));
+
+function fieldBox(p, x, y, w, h, el, placeholder, { multiline = false, font = 28 } = {}) {
+  const { g } = p;
+  const on = el && document.activeElement === el;
+  g.fillStyle = '#ffffff'; rr(g, x, y, w, h, 14); g.fill();
+  g.lineWidth = 3; g.strokeStyle = on ? '#3f6e3c' : '#ddd3bb'; g.stroke();
+  g.save(); g.beginPath(); g.rect(x + 4, y + 4, w - 8, h - 8); g.clip();
+  g.font = `400 ${font}px ${FONT}`; g.textBaseline = 'alphabetic';
+  const val = el?.value || '';
+  const lh = font * 1.4;
+  let lines = multiline ? wrap(g, val, w - 40) : [val];
+  if (!val) { g.fillStyle = '#9a9a88'; g.fillText(ellipsis(g, placeholder, w - 40), x + 20, y + 20 + font); }
+  // keep the end (where you are typing) in view
+  const fit = Math.max(1, Math.floor((h - 24) / lh));
+  if (lines.length > fit) lines = lines.slice(lines.length - fit);
+  if (val) { g.fillStyle = '#2c3a2b'; lines.forEach((l, i) => g.fillText(multiline ? l : ellipsis(g, l, w - 40), x + 20, y + 20 + font + i * lh)); }
+  if (on && Math.floor(performance.now() / 500) % 2) {
+    const last = lines[lines.length - 1] || '';
+    g.fillStyle = '#3f6e3c'; g.fillRect(x + 20 + (val ? Math.min(g.measureText(last).width, w - 44) : 0) + 2, y + 18 + (val ? lines.length - 1 : 0) * lh, 3, font + 8);
+  }
+  g.restore();
+  if (el) p.hits.push({ x, y, w, h, keep: true, fn: () => { el.focus({ preventScroll: true }); try { el.setSelectionRange(el.value.length, el.value.length); } catch { /* ignore */ } } });
+}
+
+// A note being written, on a big sheet pinned to the corkboard.
+function drawNoteEditor(p) {
+  const { g, canvas } = p, W = canvas.width, H = canvas.height;
+  g.fillStyle = '#c89a5a'; g.fillRect(0, 0, W, H);
+  if (corkDots) corkDots.forEach(([x, y, s, d]) => { g.fillStyle = d ? 'rgba(90,55,25,.35)' : 'rgba(255,230,190,.25)'; g.fillRect(x, y, s, s); });
+  g.save(); g.shadowColor = 'rgba(40,20,5,.35)'; g.shadowBlur = 14; g.shadowOffsetY = 6; g.fillStyle = '#fffdf3'; g.fillRect(26, 26, W - 52, H - 52); g.restore();
+  g.fillStyle = '#c4513f'; g.beginPath(); g.arc(W / 2, 46, 11, 0, 7); g.fill();
+  p.hits = [];
+  const form = fb('form[data-form="editor"]');
+  const title = fb('form[data-form="editor"] [name="title"]'), cat = fb('form[data-form="editor"] [name="category"]'), body = fb('form[data-form="editor"] [name="body"]');
+  const d = editing.draft;
+  const cancel = d?.id ? `#/item/${encodeURIComponent(d.id)}` : '#/notes';
+  pill(p, 48, 70, 150, 54, 'Cancel', { stroke: '#7a8574', text: '#5e6c57', fn: () => { location.hash = cancel; } });
+  pill(p, W - 188, 70, 140, 54, 'Save', { fill: '#3f6e3c', text: '#fffdf3', fn: () => form?.requestSubmit() });
+  g.fillStyle = '#2c3a2b'; g.font = `500 44px ${HEAD}`; g.textBaseline = 'alphabetic'; g.fillText(d?.id ? 'Edit note' : 'New note', 50, 182);
+  const err = fb('#form-error');
+  let y = 200;
+  if (err && !err.hidden && err.textContent) { g.fillStyle = '#c4513f'; g.font = `400 22px ${FONT}`; g.fillText(ellipsis(g, err.textContent, W - 110), 52, y + 22); y += 34; }
+  fieldBox(p, 48, y, W - 96, 70, title, 'Title', { font: 30 }); y += 86;
+  fieldBox(p, 48, y, W - 96, 62, cat, 'Category (Gear, Links, Lists…)', { font: 24 }); y += 76;
+  // quick category chips
+  let x = 48;
+  ['General', 'Healthy living', 'Gear', 'Links', 'Lists'].forEach(c => {
+    g.font = `600 21px ${FONT}`; const w = g.measureText(c).width + 28;
+    if (x + w > W - 48) return;
+    const on = cat?.value === c;
+    pill(p, x, y, w, 40, c, { fill: on ? '#3f6e3c' : null, stroke: '#3f6e3c', text: on ? '#fff' : '#3f6e3c', font: 21, fn: () => { if (cat) cat.value = c; } });
+    x += w + 8;
+  });
+  y += 56;
+  const del = fb('form[data-form="editor"] [data-action="delete"]');
+  fieldBox(p, 48, y, W - 96, H - y - (del ? 130 : 60), body, 'Write anything. “## ” makes a heading, “- ” a list.', { multiline: true, font: 26 });
+  if (del) pill(p, 48, H - 112, 200, 54, 'Delete', { stroke: '#c4513f', text: '#c4513f', fn: () => del.click() });
+  p.maxScroll = 0;
+  p.tex.needsUpdate = true;
+}
+
+// Training: one exercise at a time on the gym whiteboard, with the rest timer.
+function drawTraining(p) {
+  const { g, canvas } = p, W = canvas.width, H = canvas.height;
+  const ink = '#24303a', soft = '#6a7680', blue = '#2f5f9a', red = '#c4513f', green = '#3f7a3c';
+  g.fillStyle = '#fbfcfd'; g.fillRect(0, 0, W, H);
+  p.hits = [];
+  const it = getItem(mode.id);
+  if (!it) { p.tex.needsUpdate = true; return; }
+  const flat = (it.blocks || []).flatMap(b => b.exercises.map(e => ({ ...e, block: b.name })));
+  const i = Math.min(Math.max(0, mode.index), Math.max(0, flat.length - 1));
+  const ex = flat[i] || {}, next = flat[i + 1];
+  pill(p, 24, 22, 150, 56, '✕ Close', { stroke: soft, text: soft, fn: () => { location.hash = `#/item/${encodeURIComponent(it.id)}`; } });
+  g.fillStyle = soft; g.font = `500 26px ${FONT}`; g.textBaseline = 'middle'; g.fillText(ellipsis(g, it.title, W - 220), 194, 50);
+  // progress dots
+  const pw = W - 48;
+  g.fillStyle = '#e3e8ec'; rr(g, 24, 100, pw, 14, 7); g.fill();
+  g.fillStyle = green; rr(g, 24, 100, pw * ((i + 1) / Math.max(1, flat.length)), 14, 7); g.fill();
+  g.fillStyle = soft; g.font = `600 24px ${FONT}`; g.textBaseline = 'alphabetic';
+  g.fillText(`${i + 1} of ${flat.length}${ex.block ? `  ·  ${ex.block.toUpperCase()}` : ''}`, 28, 160);
+  g.fillStyle = blue; g.font = `500 64px ${HEAD}`;
+  let y = 240;
+  wrap(g, ex.name || '', W - 56, 3).forEach(l => { g.fillText(l, 28, y); y += 72; });
+  const scheme = [ex.sets && `${ex.sets} sets`, ex.reps && (ex.sets ? `of ${ex.reps}` : ex.reps)].filter(Boolean).join(' ');
+  if (scheme) { g.fillStyle = red; g.font = `600 44px ${FONT}`; g.fillText(scheme, 28, y + 10); y += 70; }
+  if (ex.note) { g.fillStyle = soft; g.font = `400 26px ${FONT}`; wrap(g, ex.note, W - 56, 3).forEach(l => { g.fillText(l, 28, y); y += 36; }); }
+  // rest timer: a big marker-drawn clock
+  const cy = Math.max(y + 150, 640), r = 120;
+  const timerOn = Boolean(mode.timer) || (mode.timerLeft > 0 && mode.timerTotal);
+  g.lineWidth = 14; g.strokeStyle = '#e3e8ec'; g.beginPath(); g.arc(W / 2, cy, r, 0, 7); g.stroke();
+  if (timerOn) {
+    g.strokeStyle = mode.timerLeft === 0 ? green : blue; g.beginPath(); g.arc(W / 2, cy, r, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * (mode.timerLeft / (mode.timerTotal || 1))); g.stroke();
+    g.fillStyle = ink; g.font = `600 64px ${FONT}`; g.textAlign = 'center'; g.textBaseline = 'middle';
+    g.fillText(mode.timerLeft === 0 ? 'Go!' : `${Math.floor(mode.timerLeft / 60)}:${String(mode.timerLeft % 60).padStart(2, '0')}`, W / 2, cy); g.textAlign = 'left';
+    p.hits.push({ x: W / 2 - r, y: cy - r, w: r * 2, h: r * 2, fn: () => press('[data-action="timer-stop"]') });
+    g.fillStyle = soft; g.font = `400 22px ${FONT}`; g.textAlign = 'center'; g.fillText(mode.timerLeft === 0 ? 'Tap to close' : 'Tap to stop', W / 2, cy + r + 34); g.textAlign = 'left';
+  } else {
+    g.fillStyle = blue; g.font = `600 34px ${FONT}`; g.textAlign = 'center'; g.textBaseline = 'middle';
+    g.fillText('Rest', W / 2, cy - 18); g.font = `400 28px ${FONT}`; g.fillText(ex.rest || '90s', W / 2, cy + 24); g.textAlign = 'left';
+    p.hits.push({ x: W / 2 - r, y: cy - r, w: r * 2, h: r * 2, fn: () => press('[data-action="timer-start"]') });
+    g.fillStyle = soft; g.font = `400 22px ${FONT}`; g.textAlign = 'center'; g.fillText('Tap to start the rest timer', W / 2, cy + r + 34); g.textAlign = 'left';
+  }
+  if (next) { g.fillStyle = soft; g.font = `400 26px ${FONT}`; g.textBaseline = 'alphabetic'; g.fillText(ellipsis(g, `Next: ${next.name}`, W - 56), 28, H - 130); }
+  const bw = (W - 64) / 2;
+  pill(p, 24, H - 96, bw, 74, '← Back', { stroke: green, text: green, font: 30, fn: () => { if (i > 0) press('[data-action="mode-prev"]'); } });
+  if (i < flat.length - 1) pill(p, 40 + bw, H - 96, bw, 74, 'Next →', { fill: green, text: '#fff', font: 30, fn: () => press('[data-action="mode-next"]') });
+  else pill(p, 40 + bw, H - 96, bw, 74, '✓ Finish', { fill: green, text: '#fff', font: 30, fn: () => { location.hash = `#/item/${encodeURIComponent(it.id)}`; } });
+  p.maxScroll = 0;
+  p.tex.needsUpdate = true;
+}
+
 function office(night) {
   const scene = new THREE.Scene();
   const W = 8, D = 8;
@@ -981,7 +1100,7 @@ function office(night) {
   spots.push({ label: 'Notes', sub: 'Corkboard', href: '#/notes', pos: at(board, [0, 0.98, 0.05]), target: at(board, [0, 0, 1.2]), mesh: board, here: true });
   spots.push({ label: 'Living room', href: '#/', pos: back.localToWorld(new THREE.Vector3(0, 2.52, 0.1)), target: back.localToWorld(new THREE.Vector3(0, 1.2, 0.6)), mesh: back, back: true });
   const panels = { monitor: todoPanel, board: boardPanel };
-  const draw = { monitor: () => drawTodo(todoPanel, night), board: () => drawBoard(boardPanel, night) };
+  const draw = { monitor: () => drawTodo(todoPanel, night), board: () => (detailId === 'edit' ? drawNoteEditor(boardPanel) : drawBoard(boardPanel, night)) };
   let blink = 0;
   return {
     scene, spots, eye: new THREE.Vector3(0, 1.7, 2.4), yawCenter: Math.PI, yawRange: 1.0, pitch: -0.12,
@@ -992,6 +1111,7 @@ function office(night) {
       steam(t);
       const b = Math.floor(t * 2);
       if (b !== blink && document.activeElement === deskInput) { blink = b; todoPanel.dirty = true; }
+      if (b !== blink && typingIn()) { blink = b; boardPanel.dirty = true; }
       for (const k of ['monitor', 'board']) if (panels[k].dirty) { panels[k].dirty = false; draw[k](); }
     },
   };
@@ -1003,7 +1123,7 @@ const ROOMS = { living: livingRoom, kitchen, gym, office };
 let deskInput = null, searchInput = null, addInput = null, passInput = null, detailId = null;
 function focusTyper(el) { el?.focus({ preventScroll: true }); for (const p of Object.values(room?.panels || {})) p.dirty = true; }
 function focusSearch() { searchInput?.focus({ preventScroll: true }); if (room?.panels?.whiteboard) room.panels.whiteboard.dirty = true; }
-const blurTyping = () => { for (const el of [deskInput, searchInput, addInput, passInput]) if (el && document.activeElement === el) el.blur(); };
+const blurTyping = () => { for (const el of [deskInput, searchInput, addInput, passInput]) if (el && document.activeElement === el) el.blur(); typingIn()?.blur(); };
 function focusDesk() { deskInput?.focus({ preventScroll: true }); if (room?.panels) room.panels.monitor.dirty = true; }
 async function submitDesk() {
   const text = deskInput?.value.trim();
