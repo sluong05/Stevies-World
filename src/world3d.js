@@ -459,8 +459,8 @@ function gym(night) {
     update(dt, t) {
       const b = Math.floor(t * 4);
       if (b !== blink && document.activeElement === searchInput) { blink = b; wbPanel.dirty = true; }
-      if (detailId === 'go' && b !== tick) { tick = b; wbPanel.dirty = true; }
-      if (wbPanel.dirty) { wbPanel.dirty = false; const it = detailId && getItem(detailId); if (detailId === 'go') drawTraining(wbPanel); else if (it?.type === 'workout') drawWorkout(wbPanel, it); else drawGym(wbPanel, night); }
+      if ((detailId === 'go' || (detailId === 'edit' && typingIn())) && b !== tick) { tick = b; wbPanel.dirty = true; }
+      if (wbPanel.dirty) { wbPanel.dirty = false; const it = detailId && getItem(detailId); if (detailId === 'go') drawTraining(wbPanel); else if (detailId === 'edit') drawWorkoutEditor(wbPanel); else if (it?.type === 'workout') drawWorkout(wbPanel, it); else drawGym(wbPanel, night); }
       bagPivot.rotation.z = Math.sin(t * 1.1) * 0.06; bagPivot.rotation.x = Math.sin(t * 0.8) * 0.04;
       hand2.parent.rotation.z = 0; hand2.rotation.z = -t; hand2.position.set(Math.sin(t) * 0.07, Math.cos(t) * 0.07, 0.02);
       void chain; void bag; void hand;
@@ -998,6 +998,83 @@ function drawNoteEditor(p) {
   p.tex.needsUpdate = true;
 }
 
+// Small helper: a row of choice chips that set a fallback form field.
+function chipRow(p, x, y, maxW, opts, cur, set, { accent = '#3f6e3c', font = 21 } = {}) {
+  const { g } = p;
+  let cx = x, cy = y;
+  for (const [v, l] of opts) {
+    g.font = `600 ${font}px ${FONT}`; const w = g.measureText(l).width + 28;
+    if (cx + w > x + maxW) { cx = x; cy += 50; }
+    const on = cur === v;
+    pill(p, cx, cy, w, 40, l, { fill: on ? accent : null, stroke: accent, text: on ? '#fff' : accent, font, fn: () => set(v) });
+    cx += w + 8;
+  }
+  return cy + 52;
+}
+const ef = n => fb(`form[data-form="editor"] [name="${n}"]`);
+const editorErr = (p, y, W) => {
+  const err = fb('#form-error');
+  if (err && !err.hidden && err.textContent) { p.g.fillStyle = '#c4513f'; p.g.font = `400 22px ${FONT}`; p.g.textBaseline = 'alphabetic'; p.g.fillText(ellipsis(p.g, err.textContent, W - 110), 52, y + 22); return y + 34; }
+  return y;
+};
+
+// A workout being written, in marker on the gym whiteboard.
+function drawWorkoutEditor(p) {
+  const { g, canvas } = p, W = canvas.width, H = canvas.height;
+  const blue = '#2f5f9a', soft = '#6a7680';
+  g.fillStyle = '#fbfcfd'; g.fillRect(0, 0, W, H);
+  p.hits = [];
+  const d = editing.draft, form = fb('form[data-form="editor"]');
+  const cancel = d?.id ? `#/item/${encodeURIComponent(d.id)}` : '#/workouts';
+  pill(p, 24, 22, 150, 54, 'Cancel', { stroke: soft, text: soft, fn: () => { location.hash = cancel; } });
+  pill(p, W - 164, 22, 140, 54, 'Save', { fill: blue, text: '#fff', fn: () => form?.requestSubmit() });
+  g.fillStyle = blue; g.font = `500 42px ${HEAD}`; g.textBaseline = 'alphabetic'; g.fillText(d?.id ? 'Edit workout' : 'New workout', 28, 130);
+  let y = editorErr(p, 146, W);
+  fieldBox(p, 24, y, W - 48, 64, ef('title'), 'Name, like “Leg day”', { font: 28 }); y += 78;
+  const focus = ef('focus');
+  y = chipRow(p, 24, y, W - 48, [...(focus?.options || [])].map(o => [o.value, o.textContent]), focus?.value, v => { if (focus) focus.value = v; }, { accent: blue });
+  fieldBox(p, 24, y, 180, 58, ef('minutes'), 'Minutes', { font: 24 });
+  fieldBox(p, 216, y, W - 240, 58, ef('equipment'), 'Equipment', { font: 24 }); y += 72;
+  g.fillStyle = soft; g.font = `400 20px ${FONT}`; g.fillText('One per line: “Squat 3x10 rest 60s”. “Main:” starts a section.', 28, y + 18); y += 30;
+  const del = fb('form[data-form="editor"] [data-action="delete"]');
+  fieldBox(p, 24, y, W - 48, H - y - (del ? 100 : 30), ef('exercises'), 'Warm-up:\nBike 5 min', { multiline: true, font: 24 });
+  if (del) pill(p, 24, H - 84, 180, 56, 'Delete', { stroke: '#c4513f', text: '#c4513f', fn: () => del.click() });
+  p.maxScroll = 0;
+  p.tex.needsUpdate = true;
+}
+
+// A to-do being written, on the desk monitor.
+function drawTaskEditor(p, night) {
+  const { g, canvas } = p, W = canvas.width, H = canvas.height;
+  const ink = night ? '#eef0dc' : '#2c3a2b', soft = night ? '#aab3c4' : '#6b7866', accent = night ? '#f3c55c' : '#3f6e3c', on = night ? '#1a2238' : '#fffdf3';
+  g.fillStyle = night ? '#1a2440' : '#fffaf0'; g.fillRect(0, 0, W, H);
+  p.hits = [];
+  const d = editing.draft, form = fb('form[data-form="editor"]');
+  const cancel = d?.id ? `#/item/${encodeURIComponent(d.id)}` : '#/todo';
+  pill(p, 24, 20, 140, 50, 'Cancel', { stroke: soft, text: soft, fn: () => { location.hash = cancel; } });
+  pill(p, W - 144, 20, 120, 50, 'Save', { fill: accent, text: on, fn: () => form?.requestSubmit() });
+  g.fillStyle = ink; g.font = `500 36px ${HEAD}`; g.textBaseline = 'alphabetic'; g.fillText(d?.id ? 'Edit to-do' : 'New to-do', W / 2 - g.measureText(d?.id ? 'Edit to-do' : 'New to-do').width / 2, 58);
+  let y = editorErr(p, 86, W);
+  fieldBox(p, 24, y, W - 48, 58, ef('title'), 'What needs doing?', { font: 26 }); y += 70;
+  const due = ef('due'), today = todayISO();
+  const dueBtns = [...form?.querySelectorAll('[data-action="set-due"]') || []].map(b => [b.dataset.value, b.textContent]);
+  g.fillStyle = soft; g.font = `600 20px ${FONT}`; g.fillText(due?.value ? `Due ${dueLabel(due.value, today) || due.value}` : 'No due date', 28, y + 20); y += 30;
+  y = chipRow(p, 24, y, W - 48, dueBtns, due?.value || '', v => { if (due) due.value = v; }, { accent, font: 19 });
+  const rep = ef('repeat');
+  y = chipRow(p, 24, y - 4, W - 48, [...(rep?.options || [])].map(o => [o.value, o.textContent]), rep?.value, v => { if (rep) rep.value = v; }, { accent, font: 19 });
+  const imp = ef('important');
+  fieldBox(p, 24, y, W / 2 - 32, 52, ef('list'), 'List (Personal…)', { font: 22 });
+  pill(p, W / 2 + 8, y, W / 2 - 32, 52, imp?.checked ? '★ Important' : '☆ Important', { fill: imp?.checked ? accent : null, stroke: accent, text: imp?.checked ? on : accent, font: 21, fn: () => { if (imp) imp.checked = !imp.checked; } });
+  y += 64;
+  const del = fb('form[data-form="editor"] [data-action="delete"]');
+  const rest = H - y - (del ? 80 : 20), half = (rest - 12) / 2;
+  fieldBox(p, 24, y, W - 48, half, ef('steps'), 'Steps, one per line (optional)', { multiline: true, font: 22 }); y += half + 12;
+  fieldBox(p, 24, y, W - 48, half, ef('note'), 'Notes: details, who to ask…', { multiline: true, font: 22 });
+  if (del) pill(p, 24, H - 66, 160, 50, 'Delete', { stroke: '#c4513f', text: '#c4513f', fn: () => del.click() });
+  p.maxScroll = 0;
+  p.tex.needsUpdate = true;
+}
+
 // Training: one exercise at a time on the gym whiteboard, with the rest timer.
 function drawTraining(p) {
   const { g, canvas } = p, W = canvas.width, H = canvas.height;
@@ -1155,7 +1232,7 @@ function office(night) {
   spots.push({ label: 'Notes', sub: 'Corkboard', href: '#/notes', pos: at(board, [0, 0.98, 0.05]), target: at(board, [0, 0, 1.2]), mesh: board, here: true });
   spots.push({ label: 'Living room', href: '#/', pos: back.localToWorld(new THREE.Vector3(0, 2.52, 0.1)), target: back.localToWorld(new THREE.Vector3(0, 1.2, 0.6)), mesh: back, back: true });
   const panels = { monitor: todoPanel, board: boardPanel };
-  const draw = { monitor: () => { const t = detailId?.startsWith?.('task:') && getItem(detailId.slice(5)); if (t) drawTask(todoPanel, t, night); else drawTodo(todoPanel, night); }, board: () => (detailId === 'edit' ? drawNoteEditor(boardPanel) : drawBoard(boardPanel, night)) };
+  const draw = { monitor: () => { if (detailId === 'edit-task') return drawTaskEditor(todoPanel, night); const t = detailId?.startsWith?.('task:') && getItem(detailId.slice(5)); if (t) drawTask(todoPanel, t, night); else drawTodo(todoPanel, night); }, board: () => (detailId === 'edit' ? drawNoteEditor(boardPanel) : drawBoard(boardPanel, night)) };
   let blink = 0;
   return {
     scene, spots, eye: new THREE.Vector3(0, 1.7, 2.4), yawCenter: Math.PI, yawRange: 1.0, pitch: -0.12,
@@ -1166,7 +1243,7 @@ function office(night) {
       steam(t);
       const b = Math.floor(t * 2);
       if (b !== blink && document.activeElement === deskInput) { blink = b; todoPanel.dirty = true; }
-      if (b !== blink && typingIn()) { blink = b; boardPanel.dirty = true; }
+      if (b !== blink && typingIn()) { blink = b; boardPanel.dirty = true; todoPanel.dirty = true; }
       for (const k of ['monitor', 'board']) if (panels[k].dirty) { panels[k].dirty = false; draw[k](); }
     },
   };
