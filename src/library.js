@@ -16,27 +16,23 @@ const weekday = date => { const { y, m, d } = parts(date); return new Date(y, m,
 const longDate = date => { const { y, m, d } = parts(date); return `${WEEKDAYS[weekday(date)]}, ${MONTHS[m]} ${d}, ${y}`; };
 const shiftDay = (date, n) => { const { y, m, d } = parts(date); const t = new Date(y, m, d + n); return iso(t.getFullYear(), t.getMonth(), t.getDate()); };
 const isDate = v => /^\d{4}-\d{2}-\d{2}$/.test(v || '');
-const MONTHS_BACK = 2; // the current month plus two before it, or further back if older entries exist
-
 const entryId = date => `journal-${date}`;
 const entry = date => getItem(entryId(date));
 const hasWriting = e => Boolean(e && (e.body || e.nextWorkout || e.workoutId));
+const writtenDates = () => byType('journal').filter(hasWriting).map(e => e.date).filter(d => d <= todayISO()).sort();
 
+// One bay per month that has entries, oldest first, and always this month so today's book has a home.
 function months() {
-  const today = todayISO();
-  const t = parts(today);
-  let start = { y: t.y, m: t.m - MONTHS_BACK };
-  for (const e of byType('journal')) {
-    const p = parts(e.date);
-    if (p.y * 12 + p.m < start.y * 12 + start.m) start = { y: p.y, m: p.m };
+  const t = parts(todayISO());
+  const map = new Map();
+  for (const date of writtenDates()) {
+    const { y, m } = parts(date);
+    const key = y * 12 + m;
+    if (!map.has(key)) map.set(key, { y, m, days: [] });
+    map.get(key).days.push(date);
   }
-  const out = [];
-  for (let k = start.y * 12 + start.m; k <= t.y * 12 + t.m; k++) {
-    const y = Math.floor(k / 12), m = k % 12;
-    const last = k === t.y * 12 + t.m ? t.d : new Date(y, m + 1, 0).getDate();
-    out.push({ y, m, days: Array.from({ length: last }, (_, i) => iso(y, m, i + 1)) });
-  }
-  return out;
+  if (!map.has(t.y * 12 + t.m)) map.set(t.y * 12 + t.m, { y: t.y, m: t.m, days: [] });
+  return [...map.entries()].sort((a, b) => a[0] - b[0]).map(([, v]) => v);
 }
 
 // Small stable random numbers per date, so each book keeps its look.
@@ -83,7 +79,18 @@ export function mount(root, date) {
   document.body.classList.add('in-library');
   try { buildScene(); }
   catch (error) { console.warn('Library 3D unavailable', error); S.flat = true; buildFlat(); }
+  updateHud();
   if (isDate(date)) route(date); else focusMonth(S.bays.length - 1, true);
+}
+
+function updateHud() {
+  if (!S) return;
+  const hasToday = Boolean(entry(todayISO()) && hasWriting(entry(todayISO())));
+  const empty = !writtenDates().length;
+  S.root.querySelector('.lib-hint').textContent = empty ? 'Your shelves are empty for now. Start today’s book to place the first one.' : hasToday ? 'Tap a book to open that day' : 'Tap a book to open it, or start today’s';
+  const btn = S.root.querySelector('[data-lib="today"]');
+  btn.textContent = hasToday ? 'Today' : 'Start today';
+  btn.classList.toggle('lib-start', !hasToday);
 }
 
 export function unmount() {
@@ -110,9 +117,23 @@ export function route(date) {
   else openBook(date);
 }
 
+function shelvesChanged() {
+  const want = writtenDates().join();
+  const have = S.flat ? S.flatDates : [...S.books.keys()].filter(d => !S.books.get(d).temp).sort().join();
+  return want !== have;
+}
+function rebuild() {
+  const root = S.root;
+  const x = S.camTarget;
+  mount(root, '');
+  if (S && !S.flat && Number.isFinite(x)) { S.camTarget = S.camX = clampX(x); }
+}
+
 /** The library changed (a save here, or a sync from another device). */
 export function refresh() {
   if (!S) return;
+  updateHud();
+  if (!S.open && !S.busy && shelvesChanged()) { rebuild(); return; }
   if (!S.flat) for (const [date, b] of S.books) {
     const written = hasWriting(entry(date));
     if (written !== b.written) { b.written = written; paintSpine(b); }
@@ -264,10 +285,10 @@ function buildScene() {
 
   // Books.
   const today = todayISO();
-  S.bays.forEach(month => month.days.forEach(date => {
+  S.makeBook = (date, month, index) => {
     const r = rand(date);
     const { d } = parts(date);
-    const s = Math.floor((d - 1) / PER_SHELF), slot = (d - 1) % PER_SHELF;
+    const s = Math.min(SHELVES - 1, Math.floor(index / PER_SHELF)), slot = index % PER_SHELF;
     const H = 0.2 + r() * 0.07, W = 0.15 + r() * 0.02, T = 0.04 + r() * 0.018;
     const color = BOOK_COLORS[Math.floor(r() * BOOK_COLORS.length)];
     const c = document.createElement('canvas'); c.width = 64; c.height = 384;
@@ -316,7 +337,9 @@ function buildScene() {
     scene.add(group);
     Object.assign(b, { group, hinge, home: { pos: group.position.clone(), rot: group.rotation.clone() } });
     S.books.set(date, b);
-  }));
+    return b;
+  };
+  S.bays.forEach(month => month.days.forEach((date, i) => S.makeBook(date, month, i)));
 
   // Dust drifting through the lamplight.
   const N = 160, pos = new Float32Array(N * 3), rd = rand('dust');
@@ -327,6 +350,7 @@ function buildScene() {
   scene.add(S.dust);
 
   S.pickables = [...S.books.values()].map(b => b.group.children[0]);
+  S.month = monthOf;
   S.minX = S.bayX(0); S.maxX = S.bayX(S.bays.length - 1);
   S.reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
 
@@ -335,6 +359,11 @@ function buildScene() {
   bindPointer();
   S.on(document, 'visibilitychange', () => { if (!document.hidden) loop(); });
   loop();
+}
+
+function monthOf(date) {
+  const { y, m } = parts(date);
+  return S.bays.findIndex(b => b.y === y && b.m === m);
 }
 
 function viewDistance() {
@@ -434,9 +463,9 @@ function onHudClick(e) {
   const a = el.dataset.lib;
   if (a === 'prev-month') focusMonth((S.bayIndex ?? 0) - 1);
   if (a === 'next-month') focusMonth((S.bayIndex ?? 0) + 1);
-  if (a === 'today') { if (S.flat) location.hash = `#/library/${todayISO()}`; else focusMonth(S.bays.length - 1); }
+  if (a === 'today') location.hash = `#/library/${todayISO()}`;
   if (a === 'close') location.hash = '#/library';
-  if (a === 'day') { const next = shiftDay(S.open.date, Number(el.dataset.step)); if (next <= todayISO()) location.hash = `#/library/${next}`; }
+  if (a === 'day' && el.dataset.date) location.hash = `#/library/${el.dataset.date}`;
   if (a === 'copy-plan') {
     const f = S.pages.querySelector('[name="nextWorkout"]');
     f.value = el.dataset.text; onPageInput({ target: f }); el.closest('.lib-carry')?.remove();
@@ -476,10 +505,16 @@ async function openBook(date) {
   S.open = { date };
   document.body.classList.add('lib-reading');
   if (S.flat) { showPages(date); return; }
-  const b = S.books.get(date);
+  let b = S.books.get(date);
+  if (!b && date === todayISO()) {
+    const bay = S.bays[S.bays.length - 1];
+    b = S.makeBook(date, bay, bay.days.length);
+    b.temp = true;
+    S.pickables.push(b.group.children[0]);
+  }
   if (!b) { showPages(date); return; }
   S.busy = true;
-  const bayI = S.bays.findIndex(m => m.days.includes(date));
+  const bayI = Math.max(0, monthOf(date));
   if (bayI !== S.bayIndex || Math.abs(S.camX - S.bays[bayI].x) > 0.01) { focusMonth(bayI); await tween(450, () => {}); }
   S.open.book = b;
   b.peek = 0;
@@ -506,7 +541,7 @@ async function closeBook(fast = false) {
   hidePages();
   document.body.classList.remove('lib-reading');
   S.root.querySelector('.lib-dim').classList.remove('on');
-  if (!b || S.flat) return;
+  if (!b || S.flat) { if (shelvesChanged()) rebuild(); return; }
   S.busy = true;
   const k = fast ? 0.5 : 1;
   const startHinge = b.hinge.rotation.y;
@@ -519,6 +554,14 @@ async function closeBook(fast = false) {
   });
   await tween(380 * k, t => { b.group.position.lerpVectors(out, b.home.pos, t); b.group.rotation.z = b.home.rot.z * t; });
   S.busy = false;
+  if (!S) return;
+  if (b.temp && !hasWriting(entry(b.date))) {
+    await tween(300, t => { b.group.scale.setScalar(1 - t * 0.999); });
+    S.scene.remove(b.group);
+    S.books.delete(b.date);
+    S.pickables = S.pickables.filter(m => m !== b.group.children[0]);
+  } else if (b.temp) { b.temp = false; S.bays[monthOf(b.date)]?.days.push(b.date); }
+  if (shelvesChanged()) rebuild();
 }
 
 function loop() {
@@ -565,13 +608,15 @@ function showPages(date) {
   const prev = !e.nextWorkout ? lastPlan(date) : null;
   const today = todayISO();
   const isToday = date === today;
+  const stops = [...new Set([...writtenDates(), today])].sort();
+  const before = stops.filter(d => d < date).pop() || '', after = stops.find(d => d > date) || '';
   S.pages.innerHTML = `
     <div class="lib-book" role="dialog" aria-modal="true" aria-label="${escape(longDate(date))}">
       <div class="lib-page lib-left">
         <header class="lib-head">
-          <button class="lib-chip" data-lib="day" data-step="-1" aria-label="Day before">${icon('back')}</button>
+          <button class="lib-chip" data-lib="day" data-date="${before}" aria-label="Earlier entry" ${before ? '' : 'disabled'}>${icon('back')}</button>
           <div><p class="lib-kicker">${isToday ? 'Today' : date === shiftDay(today, -1) ? 'Yesterday' : WEEKDAYS[weekday(date)]}</p><h2>${escape(longDate(date).replace(/^\w+, /, ''))}</h2></div>
-          <button class="lib-chip lib-flip" data-lib="day" data-step="1" aria-label="Day after" ${date >= today ? 'disabled' : ''}>${icon('back')}</button>
+          <button class="lib-chip lib-flip" data-lib="day" data-date="${after}" aria-label="Later entry" ${after ? '' : 'disabled'}>${icon('back')}</button>
         </header>
         <label class="lib-label" for="lib-body">Thoughts</label>
         <textarea id="lib-body" name="body" class="lib-lines" placeholder="What’s on your mind today?">${escape(e.body || '')}</textarea>
@@ -632,8 +677,9 @@ async function saveNow() {
 
 // ---------- no WebGL: a simple shelf of buttons ----------
 function buildFlat() {
-  if (!S.bays.length) S.bays = months().map(m => ({ ...m }));
-  S.stage.innerHTML = `<div class="lib-flat">${S.bays.map((m, i) => `<section data-month="${i}"><h2>${MONTHS[m.m]} ${m.y}</h2><div class="lib-flat-row">${m.days.map(date => { const r = rand(date); return `<a class="lib-flat-book ${hasWriting(entry(date)) ? 'written' : ''}" style="--c:${BOOK_COLORS[Math.floor((r(), r(), r(), r()) * BOOK_COLORS.length)]}" href="#/library/${date}" aria-label="${escape(longDate(date))}">${parts(date).d}</a>`; }).join('')}</div></section>`).join('')}</div>`;
+  S.bays = months();
+  S.flatDates = writtenDates().join();
+  S.stage.innerHTML = `<div class="lib-flat">${S.bays.map((m, i) => `<section data-month="${i}"><h2>${MONTHS[m.m]} ${m.y}</h2><div class="lib-flat-row">${m.days.length ? '' : '<p class="lib-flat-empty">No books yet.</p>'}${m.days.map(date => { const r = rand(date); return `<a class="lib-flat-book ${hasWriting(entry(date)) ? 'written' : ''}" style="--c:${BOOK_COLORS[Math.floor((r(), r(), r(), r()) * BOOK_COLORS.length)]}" href="#/library/${date}" aria-label="${escape(longDate(date))}">${parts(date).d}</a>`; }).join('')}</div></section>`).join('')}</div>`;
   S.stage.removeAttribute('aria-hidden');
 }
 
