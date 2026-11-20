@@ -62,7 +62,11 @@ function render({ keepScroll = false } = {}) {
   const caret = focused?.selectionStart;
   const room = ROOM_OF[a || ''] || null;
   const theme = document.documentElement.dataset.theme;
-  if (room && room !== 'living' && theme !== 'plain') html = `<div class="room-stage room-stage-short" aria-hidden="true"></div><div class="room-sheet">${html}</div>`;
+  if (room && theme !== 'plain') {
+    html = FULL.has(a || '')
+      ? `<section class="room-stage room-stage-full" aria-label="${ROOM_LABEL[room]}"></section><div class="room-fallback">${html}</div>`
+      : `<div class="room-stage room-stage-short" aria-hidden="true"></div><div class="room-sheet">${html}</div>`;
+  }
   main.innerHTML = html;
   main.dataset.view = a || 'home';
   $$('[data-tab]').forEach(el => (el.dataset.tab === tab ? el.setAttribute('aria-current', 'page') : el.removeAttribute('aria-current')));
@@ -77,16 +81,21 @@ function render({ keepScroll = false } = {}) {
 
 // The house (see world3d.js): each section is a room, loaded after the page has painted.
 const ROOM_OF = { '': 'living', recipes: 'kitchen', workouts: 'gym', office: 'office', todo: 'office', notes: 'office' };
+const FOCUS_OF = { todo: 'monitor', notes: 'board' };
+const FULL = new Set(['', 'office', 'todo', 'notes']);
 const ROOM_LABEL = { living: 'Living room', kitchen: 'Kitchen', gym: 'Gym', office: 'Office' };
 let worldMod = null;
 function setRoom(room) {
   const theme = document.documentElement.dataset.theme;
   document.body.dataset.room = room && theme !== 'plain' ? room : '';
+  const part = parseRoute().parts[0] || '';
+  document.body.dataset.screen = room && theme !== 'plain' && FULL.has(part) ? 'full' : '';
+  const focus = FOCUS_OF[part] || null;
   const label = $('#room-name');
   if (label) label.textContent = room && room !== 'living' ? ROOM_LABEL[room] : '';
-  if (worldMod) { worldMod.show(room, theme); return; }
+  if (worldMod) { worldMod.show(room, theme, focus); return; }
   if (!room || theme === 'plain') return;
-  const go = () => import('./world3d.js').then(m => { worldMod = m; const r = ROOM_OF[parseRoute().parts[0] || ''] || null; m.show(r, document.documentElement.dataset.theme); }).catch(() => {});
+  const go = () => import('./world3d.js').then(m => { worldMod = m; const p = parseRoute().parts[0] || ''; m.show(ROOM_OF[p] || null, document.documentElement.dataset.theme, FOCUS_OF[p] || null); }).catch(() => document.body.classList.add('world-failed'));
   (window.requestIdleCallback || (f => setTimeout(f, 120)))(go, { timeout: 600 });
 }
 

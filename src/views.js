@@ -77,12 +77,9 @@ export function homeView() {
   const workouts = byType('workout').sort(newest);
   const notes = byType('note').sort(newest);
   const sync = syncState();
-  const hero = theme === 'plain'
-    ? `<section class="hero hero-plain"><h1>${greeting()}, Steven.</h1></section>`
-    : `<section class="room-stage room-stage-home" aria-label="Living room"><div class="stage-fallback">${scenery(time)}</div>
-        <h1 class="hero-greeting">${greeting()}, Steven.</h1><p class="room-hint">Drag to look around. Tap a door to go in.</p></section>`;
+  const hero = `<section class="hero hero-plain"><h1>${greeting()}, Steven.</h1></section>`;
   return `${hero}
-  <div class="room-sheet">
+  <div>
   ${doorList()}
   <div class="home-search">${searchBox('Search recipes, workouts, notes…')}</div>
   ${!sync.available || sync.connected || !sync.hasPasscode ? '' : `<p class="sync-note">${escape(sync.error || 'Syncing…')}</p>`}
