@@ -77,7 +77,7 @@
 html { -webkit-text-size-adjust: 100%; background: var(--bg); }
 body {
   margin: 0; background: var(--bg); color: var(--ink); font: 400 16px/1.6 var(--font-body);
-  padding-bottom: calc(84px + env(safe-area-inset-bottom)); min-height: 100vh; overflow-x: hidden;
+  padding-bottom: calc(16px + env(safe-area-inset-bottom)); min-height: 100vh; overflow-x: hidden;
   -webkit-font-smoothing: antialiased;
 }
 [data-theme="retro"] body { background-color: var(--bg); background-image: repeating-conic-gradient(rgba(0, 0, 0, .05) 0 25%, transparent 0 50%); background-size: 4px 4px; }
@@ -595,7 +595,7 @@ input:focus, textarea:focus, select:focus { outline: 2.5px solid var(--focus); o
 
 /* ---------- toast ---------- */
 .toast {
-  position: fixed; left: 50%; bottom: calc(96px + env(safe-area-inset-bottom)); z-index: 80; transform: translate(-50%, 20px); opacity: 0; pointer-events: none;
+  position: fixed; left: 50%; bottom: calc(24px + env(safe-area-inset-bottom)); z-index: 80; transform: translate(-50%, 20px); opacity: 0; pointer-events: none;
   padding: 11px 18px; border-radius: var(--pill); background: var(--ink); color: var(--bg); font-weight: 600; font-size: 15px; max-width: calc(100vw - 32px);
   transition: opacity .2s ease, transform .2s ease; box-shadow: var(--shadow-lift);
 }
@@ -717,22 +717,6 @@ body.lib-reading .lib-hud * { pointer-events: none; }
 .lib-chip { white-space: nowrap; }
 .lib-nav:has([data-lib="prev-month"]:disabled):has([data-lib="next-month"]:disabled) [data-lib$="-month"] { visibility: hidden; }
 
-/* ---------- three.js scenes (src/scenes3d.js) ---------- */
-.scene3d-canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; touch-action: pan-y; opacity: 0; transition: opacity .5s ease; }
-.is-live > .scene3d-canvas { opacity: 1; }
-.hero-scene .scenery { transition: opacity .5s ease; }
-.hero-scene.is-live .scenery { opacity: 0; }
-.scene-banner {
-  position: relative; height: 132px; margin: 14px 0 -6px; border-radius: var(--radius, 22px); overflow: hidden;
-  background: radial-gradient(ellipse at 50% 85%, var(--accent-soft), var(--card) 70%); box-shadow: inset 0 0 0 1px var(--line);
-}
-.scene-jar { height: 150px; }
-.jar-caption { position: absolute; left: 14px; top: 10px; max-width: 32%; z-index: 1; font-size: 13px; color: var(--ink-soft); pointer-events: none; }
-[data-theme="night"] .scene-banner { background: radial-gradient(ellipse at 50% 85%, #2a3866, var(--card) 72%); }
-[data-theme="retro"] .scene-banner { border-radius: 0; box-shadow: var(--bevel-in); background: #000080; }
-[data-theme="retro"] .jar-caption { color: #fff; }
-[data-theme="plain"] .scene-banner { display: none; }
-@media (min-width: 900px) { .scene-banner { height: 170px; } }
 /* Writing straight on the 3D pages: hidden inputs plus a small toolbar under the book */
 .lib-pages.lib-ink { inset: auto 0 0 0; display: flex; justify-content: center; place-items: unset; padding: 0 8px calc(10px); overflow: visible; touch-action: auto; pointer-events: none; }
 .lib-hidden-input { position: fixed; top: 0; left: 0; width: 2px; height: 2px; opacity: 0; border: 0; padding: 0; margin: 0; resize: none; font-size: 16px; pointer-events: none; caret-color: transparent; }
@@ -751,3 +735,53 @@ body.lib-reading .lib-dim.on { opacity: .55; }
   .lib-pick select { max-width: 5.2em; }
   .lib-shelf span { display: none; }
 }
+
+/* ---------- the house (src/world3d.js) ---------- */
+.topbar { gap: 8px; }
+.room-name { font-family: var(--font-head); color: var(--ink-soft); font-size: 15px; margin-right: 4px; }
+.add-btn { background: var(--accent); color: var(--accent-ink); }
+.add-btn[aria-current] { box-shadow: 0 0 0 3px var(--accent-soft); }
+.library { height: calc(100dvh - 58px - env(safe-area-inset-top)); }
+#world { position: fixed; inset: 0; z-index: 0; opacity: 0; pointer-events: none; transition: opacity .6s ease; background: #f3e6cc; }
+#world canvas { display: block; width: 100%; height: 100%; }
+body.world-live:not([data-room=""]) #world { opacity: 1; }
+body[data-room=""] #world, body:not([data-room]) #world { display: none; }
+#main { position: relative; z-index: 1; }
+.topbar { z-index: 30; }
+#signs { position: fixed; inset: 0; z-index: 5; pointer-events: none; transition: opacity .3s; }
+#signs.faded, body.world-walking #signs, body.in-mode #signs { opacity: 0; }
+#signs.faded .sign, body.world-walking .sign { pointer-events: none; }
+.sign {
+  position: absolute; left: 0; top: 0; pointer-events: auto; display: grid; justify-items: center; gap: 1px; text-align: center; white-space: nowrap;
+  padding: 7px 13px 8px; border-radius: 14px; text-decoration: none; color: #3b2a1c; background: #fbf1da; font-size: 15px; line-height: 1.15;
+  box-shadow: 0 6px 16px -6px rgba(40, 24, 10, .55), inset 0 0 0 2px #c89a5a; transition: opacity .25s;
+}
+.sign small { font-size: 11.5px; color: #7a5a3a; }
+.sign::after { content: ''; position: absolute; left: 50%; bottom: -6px; width: 10px; height: 10px; background: inherit; transform: translateX(-50%) rotate(45deg); box-shadow: 2px 2px 0 0 #c89a5a; }
+.sign.off { opacity: 0; pointer-events: none; }
+.sign-back { background: #f6efe0; font-size: 13px; }
+[data-theme="retro"] .sign { border-radius: 0; background: var(--card); color: #000; box-shadow: var(--bevel-out); }
+[data-theme="retro"] .sign::after { display: none; }
+.room-stage { position: relative; margin: 0 -16px; touch-action: pan-y; user-select: none; -webkit-user-select: none; cursor: grab; }
+.room-stage-home { height: calc(100svh - 56px - env(safe-area-inset-top) - 70px); min-height: 360px; display: flex; flex-direction: column; justify-content: flex-end; padding: 0 20px 20px; }
+.room-stage-short { height: 40svh; min-height: 220px; }
+.stage-fallback { position: absolute; inset: 0; overflow: hidden; transition: opacity .6s; }
+.stage-fallback .scenery { width: 100%; height: 100%; }
+body.world-live .stage-fallback { opacity: 0; }
+.room-stage .hero-greeting { position: relative; left: auto; right: auto; bottom: auto; color: #fffaf0; pointer-events: none; text-shadow: 0 2px 16px rgba(30, 18, 8, .7), 0 1px 2px rgba(30, 18, 8, .6); }
+.room-hint { position: relative; margin-top: 6px; color: #fffaf0; font-size: 14px; opacity: .9; text-shadow: 0 1px 6px rgba(30, 18, 8, .8); pointer-events: none; }
+.room-sheet { position: relative; margin: 0 -16px; padding: 4px 16px 24px; background: var(--bg); border-radius: 26px 26px 0 0; box-shadow: 0 -14px 30px -18px rgba(30, 18, 8, .55); min-height: 60svh; }
+.room-sheet::before { content: ''; display: block; width: 44px; height: 5px; border-radius: 3px; background: var(--line); margin: 6px auto 4px; }
+[data-theme="retro"] .room-sheet { border-radius: 0; box-shadow: var(--bevel-out); }
+.door-list { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; margin: 14px 0 6px; }
+.door-chip, .office-pick {
+  display: flex; align-items: center; gap: 10px; padding: 12px 14px; border-radius: var(--radius-sm, 14px); background: var(--card); color: var(--ink);
+  text-decoration: none; box-shadow: var(--shadow); line-height: 1.2;
+}
+.door-chip span, .office-pick span { display: grid; }
+.door-chip small, .office-pick small { color: var(--ink-soft); font-size: 12.5px; }
+.door-chip .icon { color: var(--accent); }
+.office-picks { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.office-pick { padding: 20px 16px; font-size: 18px; }
+.office-pick .icon { width: 28px; height: 28px; color: var(--accent); }
+@media (min-width: 900px) { .door-list { grid-template-columns: repeat(4, 1fr); } .room-stage-home { height: calc(100svh - 58px - 90px); } }
