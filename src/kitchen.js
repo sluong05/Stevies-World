@@ -3,6 +3,7 @@
 // own bookcase. Tap a cookbook and it slides off the shelf and opens like a Library book:
 // the recipes are drawn right on the curved 3D pages, and you flip through them.
 import * as THREE from '../vendor/three.module.min.js';
+import { exitDoor } from './exitdoor.js';
 import { byType, getItem, isSaved, search, toggleSaved } from './store.js';
 import { toast } from './ui.js';
 import { listView } from './views.js';
@@ -296,6 +297,7 @@ function buildScene() {
   scene.background = new THREE.Color('#3a2a1c');
   scene.fog = new THREE.Fog('#3a2a1c', 2.6, 6.5);
   S.scene = scene;
+  S.exit = exitDoor(); scene.add(S.exit.group);
   S.sig = signature();
   S.dirty = false;
 
@@ -597,6 +599,11 @@ function bindPointer() {
   });
   S.on(el, 'pointerup', e => {
     if (!down) return;
+    if (!down.moved && Math.hypot(e.clientX - down.x, e.clientY - down.y) < 10) {
+      const r = S.renderer.domElement.getBoundingClientRect();
+      ray.setFromCamera(new THREE.Vector2(((e.clientX - r.left) / r.width) * 2 - 1, -((e.clientY - r.top) / r.height) * 2 + 1), S.camera);
+      if (S.exit?.hit(ray)) { down = null; location.hash = '#/'; return; }
+    }
     const d = down; down = null;
     const dx = e.clientX - d.x, dy = e.clientY - d.y;
     if (S.open) {
@@ -737,6 +744,7 @@ function loop() {
     const want = b.home.pos.z + (b.peek ? 0.035 : 0);
     if (Math.abs(b.group.position.z - want) > 0.0005 && !S.busy) b.group.position.z += (want - b.group.position.z) * 0.2;
   }
+  S.exit?.place(cam);
   S.renderer.render(S.scene, cam);
 }
 
