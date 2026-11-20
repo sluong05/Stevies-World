@@ -80,7 +80,7 @@ export function homeView() {
   const hero = theme === 'plain'
     ? `<section class="hero hero-plain"><h1>${greeting()}, Steven.</h1></section>`
     : `<section class="hero"><div class="hero-window">${theme === 'retro' ? `<div class="titlebar"><span>stevies_world.exe</span><span class="titlebar-buttons" aria-hidden="true"><i></i><i></i><i></i></span></div>` : ''}
-        <div class="hero-scene">${scenery(time)}</div>
+        <div class="hero-scene" data-3d="home" data-time="${time}">${scenery(time)}</div>
         <h1 class="hero-greeting">${greeting()}, Steven.</h1></div></section>`;
   return `${hero}
   <div class="home-search">${searchBox('Search recipes, workouts, notes…')}</div>
@@ -139,7 +139,8 @@ export function listView(type) {
     ? [['fast', '30 min or less'], ['protein', '30 g+ protein']]
     : type === 'workout' ? [['short', '30 min or less'], ['noequip', 'No equipment']] : [];
   const sorts = type === 'recipe' ? [['new', 'Newest'], ['quick', 'Quickest'], ['protein', 'Most protein'], ['cost', 'Lowest cost'], ['cuisine', 'Cuisine'], ['az', 'A to Z']] : [['new', 'Newest'], ['az', 'A to Z'], ...(type === 'workout' ? [['quick', 'Shortest']] : [])];
-  return `<section class="page-head">
+  return `<div class="scene3d scene-banner" data-3d="${key}" aria-hidden="true"></div>
+    <section class="page-head">
       <h1>${sec.name}</h1>
       <div class="page-actions">
         ${type !== 'note' ? `<button class="btn btn-soft btn-small" data-action="pick" data-type="${type}" ${items.length ? '' : 'disabled'}>${icon('shuffle')}Pick one</button>` : ''}
