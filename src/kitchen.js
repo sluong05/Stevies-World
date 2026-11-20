@@ -41,7 +41,7 @@ export function mount(root, bookKey = '', recipeId = '') {
   on(input, 'input', () => { S.query = input.value; drawChalk(); });
   on(input, 'focus', () => { S.caretOn = true; drawChalk(); });
   on(input, 'blur', () => drawChalk());
-  on(input, 'keydown', e => { if (e.key === 'Enter') { const r = S.query && search(S.query, recipes())[0]; input.blur(); const b = r && bookOf(r.id); if (b) location.hash = `#/recipes/${encodeURIComponent(b.key)}/${encodeURIComponent(r.id)}`; } if (e.key === 'Escape') { input.value = S.query = ''; input.blur(); } });
+  on(input, 'keydown', e => { if (e.key === 'Escape' && !input.value) zoomTo(null); if (e.key === 'Enter') { const r = S.query && search(S.query, recipes())[0]; input.blur(); const b = r && bookOf(r.id); if (b) location.hash = `#/recipes/${encodeURIComponent(b.key)}/${encodeURIComponent(r.id)}`; } if (e.key === 'Escape') { input.value = S.query = ''; input.blur(); } });
   S.blink = setInterval(() => { if (S && document.activeElement === input) { S.caretOn = !S.caretOn; drawChalk(); } }, 530);
   document.body.classList.add('in-library', 'in-kitchen');
   try { buildRenderer(); buildScene(); }
@@ -136,7 +136,7 @@ function makeCounterTools() {
 function placeCounterTools() {
   if (!S.chalkGroup) return;
   const cam = S.camera, zFront = S.cabFront - 0.13;
-  const depth = (cam.position.z - zFront) || 1;
+  const depth = (DEPTH / 2 + S.dist - zFront) || 1; // from the shelf view, so zooming in doesn't move them
   const halfW = Math.tan(THREE.MathUtils.degToRad(cam.fov / 2)) * cam.aspect * depth;
   const k = Math.min(1, halfW / 0.42);
   S.chalkGroup.scale.setScalar(k);
@@ -578,6 +578,7 @@ function bindPointer() {
   const el = S.renderer.domElement;
   let down = null;
   S.on(el, 'pointerdown', e => {
+    e.preventDefault(); // stops the follow-up mousedown from stealing focus from the chalkboard's search box
     if (S.busy) return;
     down = { x: e.clientX, y: e.clientY, cam: S.camTarget, lastX: e.clientX, lastT: performance.now(), moved: false };
     el.setPointerCapture?.(e.pointerId);
@@ -587,7 +588,7 @@ function bindPointer() {
     if (!down) { hover(e); return; }
     const dx = e.clientX - down.x;
     if (Math.abs(dx) > 8 || Math.abs(e.clientY - down.y) > 8) down.moved = true;
-    if (S.open) return;
+    if (S.open || S.zoom) return;
     const perPx = worldPerPixel();
     S.camTarget = clampX(down.cam - dx * perPx);
     const now = performance.now();
@@ -615,16 +616,27 @@ function bindPointer() {
     if (!d.moved) {
       S.vel = 0;
       const tool = cast(e, S.toolHits);
-      if (tool) { onCounterTap(tool); return; }
+      if (tool) {
+        const which = tool.object === S.chalkMesh ? 'chalk' : 'box';
+        if (S.zoom !== which) {
+          zoomTo(which);
+          const reg = which === 'chalk' && regionAt(S.chalk.regions, tool.uv, CHALK_W, CHALK_H);
+          if (reg?.act === 'search') onCounterTap(tool); // tapping the search line also opens the keyboard
+          return;
+        }
+        onCounterTap(tool); return;
+      }
       S.searchInput.blur();
+      if (S.zoom) { zoomTo(null); return; } // tapped away from the board or box: step back
       const hit = cast(e, S.pickables); if (hit) location.hash = `#/recipes/${encodeURIComponent(hit.object.userData.key)}`;
-    } else snapToBay();
+    } else if (!S.zoom) snapToBay();
   });
   S.on(el, 'pointercancel', () => { down = null; });
-  S.on(el, 'wheel', e => { if (S.open) return; e.preventDefault(); S.camTarget = clampX(S.camTarget + (e.deltaX || e.deltaY) * worldPerPixel()); clearTimeout(S.wheelT); S.wheelT = setTimeout(snapToBay, 220); }, { passive: false });
+  S.on(el, 'wheel', e => { if (S.open || S.zoom) return; e.preventDefault(); S.camTarget = clampX(S.camTarget + (e.deltaX || e.deltaY) * worldPerPixel()); clearTimeout(S.wheelT); S.wheelT = setTimeout(snapToBay, 220); }, { passive: false });
   S.on(window, 'keydown', e => {
     if (e.target.closest?.('input, textarea, select')) return;
     if (e.key === 'Escape' && S.open) location.hash = '#/recipes';
+    if (e.key === 'Escape' && S.zoom) zoomTo(null);
     if (e.key === 'ArrowLeft') S.open ? prev() : focusBay(currentBay() - 1);
     if (e.key === 'ArrowRight') S.open ? next() : focusBay(currentBay() + 1);
   });
@@ -637,6 +649,24 @@ function hover(e) {
   S.hovered = b;
   if (b) b.peek = 1;
   S.renderer.domElement.style.cursor = b ? 'pointer' : 'grab';
+}
+// Step up to the chalkboard or the recipe box so it fills the screen and is easy to read and tap.
+function zoomTo(which) {
+  if (!S) return;
+  S.zoom = which;
+  if (!which) S.searchInput.blur();
+}
+const _zp = new THREE.Vector3(), _zn = new THREE.Vector3(), _zq = new THREE.Quaternion();
+function zoomPose() {
+  const mesh = S.zoom === 'chalk' ? S.chalkMesh : S.cardMesh;
+  const g = mesh.geometry.parameters, k = (S.zoom === 'chalk' ? S.chalkGroup : S.boxGroup).scale.x;
+  const w = g.width * k * (S.zoom === 'chalk' ? 1.06 : 1.12), h = g.height * k * 1.12;
+  const cam = S.camera, tanH = Math.tan(THREE.MathUtils.degToRad(cam.fov / 2));
+  const d = Math.max(w / 2 / (tanH * cam.aspect), h / 2 / tanH);
+  mesh.updateWorldMatrix(true, false);
+  mesh.getWorldPosition(_zp); mesh.getWorldQuaternion(_zq);
+  _zn.set(0, 0, 1).applyQuaternion(_zq);
+  return { look: _zp, pos: _zp.clone().addScaledVector(_zn, d) };
 }
 function snapToBay() {
   const ahead = S.camTarget + S.vel * 6;
@@ -667,6 +697,7 @@ function tween(ms, step) {
   });
 }
 
+const _look = new THREE.Vector3();
 function loop() {
   if (!S?.renderer || document.hidden) return;
   cancelAnimationFrame(S.raf);
@@ -677,7 +708,23 @@ function loop() {
   S.camX += (S.camTarget - S.camX) * (S.reduced ? 1 : 0.14);
   const cam = S.camera;
   const midY = (shelfY(0) + 0.5 + COUNTER_Y - 0.12) / 2 - 0.03;
-  if (!S.open) { cam.position.set(S.camX, midY + 0.12, DEPTH / 2 + S.dist); cam.lookAt(S.camX, midY, 0); }
+  const zWant = S.zoom && !S.open ? 1 : 0, zPrev = S.zoomT || 0;
+  S.zoomT = S.reduced ? zWant : zPrev + (zWant - zPrev) * 0.16;
+  if (Math.abs(S.zoomT - zWant) < 0.001) S.zoomT = zWant;
+  if (!S.open || S.camFree) {
+    cam.position.set(S.camX, midY + 0.12, DEPTH / 2 + S.dist);
+    _look.set(S.camX, midY, 0);
+    if (S.zoomT > 0 && S.chalkGroup) {
+      placeCounterTools();
+      const z = zoomPose(), t = ease(S.zoomT);
+      cam.position.lerp(z.pos, t); _look.lerp(z.look, t);
+    }
+    cam.lookAt(_look);
+  }
+  // Idle (nothing moving but the steam): draw every other frame to spare the phone's battery.
+  const idle = !S.busy && !S.open && Math.abs(S.camTarget - S.camX) < 0.0005 && Math.abs(S.vel) < 0.0001 && S.zoomT === zWant;
+  S.frame = (S.frame || 0) + 1;
+  if (idle && S.frame % 2) return;
   S.lamp.position.x = S.camX + 0.25; S.lamp.target.position.set(S.camX, midY - 0.1, 0);
   S.stove.intensity = 1.3 + Math.sin(t * 5.3) * 0.12 + Math.sin(t * 11.1) * 0.06;
   S.flames.forEach((f, i) => { f.scale.setScalar(1 + Math.sin(t * 13 + i * 2) * 0.06); });
@@ -1025,6 +1072,7 @@ function settleBook() {
 async function openBook(b, recipeId) {
   if (!S) return;
   S.open = { book: b };
+  const zoomed = S.zoomT > 0; S.zoom = null;
   const { pages, starts } = paginate(b);
   S.pageList = pages; S.starts = starts;
   const start = recipeId && starts.has(recipeId) ? starts.get(recipeId) : 0;
@@ -1033,7 +1081,11 @@ async function openBook(b, recipeId) {
   S.searchInput.blur();
   S.busy = true; S.opening = true;
   const bayI = S.bays.indexOf(b.bay);
-  if (bayI !== S.bayIndex || Math.abs(S.camX - b.bay.x) > 0.01) { focusBay(bayI); await tween(450, () => {}); }
+  if (zoomed || bayI !== S.bayIndex || Math.abs(S.camX - b.bay.x) > 0.01) {
+    S.camFree = true; // keep the camera moving back to the shelf while the book waits
+    focusBay(bayI); await tween(zoomed ? 650 : 450, () => {});
+    if (S) { S.camFree = false; S.zoomT = 0; }
+  }
   if (S.open?.book !== b) return;
   b.peek = 0;
   attachPages(b);
