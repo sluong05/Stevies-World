@@ -37,6 +37,7 @@ function render({ keepScroll = false } = {}) {
     if (main.dataset.view === 'library' && libraryMod?.mounted()) { libraryMod.route(b || ''); return; }
     main.innerHTML = '<section class="library" id="library"><p class="lib-loading">Lighting the lamps…</p></section>';
     main.dataset.view = 'library';
+    scenesMod?.sync(null);
     window.scrollTo({ top: 0, behavior: 'instant' });
     import('./library.js').then(m => { libraryMod = m; if (parseRoute().parts[0] === 'library') m.mount($('#library'), parseRoute().parts[1] || ''); });
     return;
@@ -67,6 +68,18 @@ function render({ keepScroll = false } = {}) {
     if (!keepScroll) window.scrollTo({ top: 0, behavior: 'instant' });
   }
   lastRoute = routeKey;
+  sync3d();
+}
+
+// Small three.js scenes (see scenes3d.js) load after the page has painted.
+let scenesMod = null;
+function sync3d() {
+  const theme = document.documentElement.dataset.theme;
+  const wants = theme !== 'plain' && main.querySelector('[data-3d]');
+  if (scenesMod) { scenesMod.sync(main, theme); return; }
+  if (!wants) return;
+  const go = () => import('./scenes3d.js').then(m => { scenesMod = m; m.sync(main, document.documentElement.dataset.theme); }).catch(() => {});
+  (window.requestIdleCallback || (f => setTimeout(f, 200)))(go);
 }
 
 store.onChange(() => {
