@@ -14,6 +14,7 @@ const main = $('#main');
 let lastRoute = '';
 let lastListRoute = '#/';
 let libraryMod = null;
+let standMod = null; // Cook mode and the recipe notepad in 3D (src/stand3d.js)
 let kitchenMod = null;
 
 function parseRoute() {
@@ -84,6 +85,24 @@ function render({ keepScroll = false } = {}) {
       ? `<section class="room-stage room-stage-full" aria-label="${ROOM_LABEL[room]}"></section><div class="room-fallback">${html}</div>`
       : `<div class="room-stage room-stage-short" aria-hidden="true"></div><div class="room-sheet">${html}</div>`;
   }
+  // Recipes: Cook mode is a 3D recipe stand and editing is a 3D notepad (no 2D forms).
+  const standKind = theme === 'plain' ? '' : a === 'item' && c === 'cook' && store.getItem(b)?.type === 'recipe' ? 'cook'
+    : ['new', 'edit', 'draft'].includes(a) && editing.draft?.type === 'recipe' ? 'edit' : '';
+  if (standMod) standMod.unmount();
+  if (standKind) {
+    const fallback = html;
+    main.innerHTML = '<section class="library stand" id="stand"><p class="lib-loading">Setting out the recipe…</p></section>';
+    main.dataset.view = `stand-${standKind}`;
+    worldMod?.show(null); setRoom(null);
+    lastRoute = routeKey;
+    window.scrollTo({ top: 0, behavior: 'instant' });
+    import('./stand3d.js').then(m => {
+      standMod = m;
+      if (parseRoute().path !== routeKey || !$('#stand')) return;
+      if (!m.mount($('#stand'), standKind, b)) main.innerHTML = fallback;
+    }).catch(() => { main.innerHTML = fallback; });
+    return;
+  }
   main.innerHTML = html;
   main.dataset.view = a || 'home';
   $$('[data-tab]').forEach(el => (el.dataset.tab === tab ? el.setAttribute('aria-current', 'page') : el.removeAttribute('aria-current')));
@@ -136,6 +155,7 @@ store.onChange(() => {
   // Don't rebuild a form while someone is typing in it.
   if (['new', 'edit', 'draft', 'add'].includes(parts[0])) return;
   if (parts[0] === 'library') { libraryMod?.refresh(); return; }
+  if (main.dataset.view === 'stand-cook' && standMod?.mounted('cook')) { standMod.redraw(); return; }
   if (parts[0] === 'recipes' && main.dataset.view === 'kitchen') { kitchenMod?.refresh(); return; }
   if (parts[0] === 'settings' && document.activeElement?.name === 'passcode') return;
   const y = window.scrollY;

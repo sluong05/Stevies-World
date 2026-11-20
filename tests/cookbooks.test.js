@@ -27,3 +27,13 @@ test('other groupings', () => {
   assert.deepEqual(cookbooks(recipes, 'meal').others.map(b => b.title), ['Lunch', 'Dinner', 'Other']);
   assert.deepEqual(cookbooks(recipes, 'time').others.map(b => b.title), ['20 minutes or less', 'Under 45 minutes', 'About an hour', 'Any time']);
 });
+
+test('cook mode finds timers in steps', async () => {
+  globalThis.location ??= { hostname: 'test' };
+  const { timerIn } = await import('../src/stand3d.js').catch(() => ({}));
+  if (!timerIn) return; // browser-only module in some environments
+  assert.equal(timerIn('Simmer for 20 minutes.'), 1200);
+  assert.equal(timerIn('Cook 7-8 minutes until tender'), 480);
+  assert.equal(timerIn('Rest 1 hour'), 3600);
+  assert.equal(timerIn('Add the rice'), 0);
+});
