@@ -2,7 +2,23 @@
 import { escape, icon } from './ui.js';
 import { getItem } from './store.js';
 
-export const mode = { index: 0, id: '', kind: '', showIngredients: false, timer: null, timerLeft: 0, timerTotal: 0 };
+export const mode = { index: 0, id: '', kind: '', showIngredients: false, timer: null, timerLeft: 0, timerTotal: 0, sets: {}, startedAt: 0 };
+
+// When each workout was last finished, kept on this device only.
+const DONE_KEY = 'sw-workout-done';
+const readDone = () => { try { return JSON.parse(localStorage.getItem(DONE_KEY) || '{}') || {}; } catch { return {}; } };
+export const lastDone = id => readDone()[id] || 0;
+export function markDone(id) { const d = readDone(); d[id] = Date.now(); try { localStorage.setItem(DONE_KEY, JSON.stringify(d)); } catch { /* private mode */ } }
+export function agoLabel(ts) {
+  if (!ts) return '';
+  const day = 864e5, start = new Date(); start.setHours(0, 0, 0, 0);
+  const days = Math.ceil((start.getTime() - ts) / day);
+  if (days <= 0) return 'today';
+  if (days === 1) return 'yesterday';
+  if (days < 14) return `${days} days ago`;
+  if (days < 60) return `${Math.round(days / 7)} weeks ago`;
+  return `${Math.round(days / 30)} months ago`;
+}
 let wakeLock = null;
 
 export async function keepAwake(on) {
@@ -14,24 +30,32 @@ export async function keepAwake(on) {
 document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible' && mode.kind) keepAwake(true); });
 
 export function enterMode(kind, id) {
-  if (mode.id !== id || mode.kind !== kind) Object.assign(mode, { index: 0, showIngredients: false });
+  if (mode.id !== id || mode.kind !== kind) Object.assign(mode, { index: 0, showIngredients: false, sets: {}, startedAt: Date.now() });
   mode.id = id; mode.kind = kind;
   keepAwake(true);
 }
 export function exitMode() { stopTimer(); mode.kind = ''; keepAwake(false); }
 
-const parseSeconds = rest => {
+export const parseSeconds = rest => {
   const m = String(rest || '').match(/(\d+(?:\.\d+)?)\s*(m|min|mins|minutes)?/i);
   if (!m) return 90;
   return Math.round(Number(m[1]) * (m[2] ? 60 : 1)) || 90;
 };
 
+let timerEnd = 0;
+// Nudge a running rest timer by a few seconds (never below 5s left).
+export function addTime(sec) {
+  if (!mode.timer) return;
+  timerEnd = Math.max(Date.now() + 5000, timerEnd + sec * 1000);
+  mode.timerLeft = Math.round((timerEnd - Date.now()) / 1000);
+  mode.timerTotal = Math.max(mode.timerTotal + sec, mode.timerLeft);
+}
 export function startTimer(seconds, onTick) {
   stopTimer();
   mode.timerTotal = mode.timerLeft = seconds;
-  const end = Date.now() + seconds * 1000;
+  timerEnd = Date.now() + seconds * 1000;
   mode.timer = setInterval(() => {
-    mode.timerLeft = Math.max(0, Math.round((end - Date.now()) / 1000));
+    mode.timerLeft = Math.max(0, Math.round((timerEnd - Date.now()) / 1000));
     onTick();
     if (!mode.timerLeft) { stopTimer(); try { navigator.vibrate?.([200, 100, 200]); } catch { /* ignore */ } onTick(); }
   }, 250);

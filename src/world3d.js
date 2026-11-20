@@ -10,7 +10,7 @@ import { toggleTask, toggleStar, toggleStep, quickAdd } from './todo.js';
 import { groupTasks, dueLabel, todayISO } from '../shared/tasks.js';
 import { toast } from './ui.js';
 import { editing } from './editor.js';
-import { mode } from './modes.js';
+import { mode, startTimer, stopTimer, addTime, parseSeconds, markDone, lastDone, agoLabel } from './modes.js';
 import { THEMES, chosenTheme, autoNight } from './theme.js';
 
 const reduced = typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -450,7 +450,7 @@ function gym(night) {
   spots.push({ label: 'Living room', href: '#/', pos: back.localToWorld(new THREE.Vector3(0, 2.52, 0.1)), target: back.localToWorld(new THREE.Vector3(0, 1.2, 0.6)), mesh: back, back: true });
   scene.updateMatrixWorld(true);
   const panels = { whiteboard: wbPanel };
-  let blink = 0, tick = 0;
+  let blink = 0, tick = 0, lastLeft = -1;
   return {
     scene, spots, eye: new THREE.Vector3(0, 1.7, 2.8), yawCenter: Math.PI, yawRange: 1.1, pitch: -0.24,
     focus: { whiteboard: focusOf(wbPanel.mesh) },
@@ -459,7 +459,8 @@ function gym(night) {
     update(dt, t) {
       const b = Math.floor(t * 4);
       if (b !== blink && document.activeElement === searchInput) { blink = b; wbPanel.dirty = true; }
-      if ((detailId === 'go' || (detailId === 'edit' && typingIn())) && b !== tick) { tick = b; wbPanel.dirty = true; }
+      if (((detailId === 'go' && mode.timer) || (detailId === 'edit' && typingIn())) && b !== tick) { tick = b; wbPanel.dirty = true; }
+      if (detailId === 'go' && mode.timerLeft !== lastLeft) { lastLeft = mode.timerLeft; wbPanel.dirty = true; }
       if (wbPanel.dirty) { wbPanel.dirty = false; const it = detailId && getItem(detailId); if (detailId === 'go') drawTraining(wbPanel); else if (detailId === 'edit') drawWorkoutEditor(wbPanel); else if (it?.type === 'workout') drawWorkout(wbPanel, it); else drawGym(wbPanel, night); }
       bagPivot.rotation.z = Math.sin(t * 1.1) * 0.06; bagPivot.rotation.x = Math.sin(t * 0.8) * 0.04;
       hand2.parent.rotation.z = 0; hand2.rotation.z = -t; hand2.position.set(Math.sin(t) * 0.07, Math.cos(t) * 0.07, 0.02);
@@ -737,7 +738,7 @@ function drawGym(p, night) {
     g.fillStyle = ink; g.font = `600 31px ${FONT}`; g.textBaseline = 'alphabetic';
     g.fillText(ellipsis(g, it.title, W - 200), 84, ry + 50);
     const n = (it.blocks || []).reduce((k, b) => k + b.exercises.length, 0);
-    const meta = [it.minutes ? (it.minutes < 60 ? `${Math.round(it.minutes)} min` : `${Math.floor(it.minutes / 60)} hr ${Math.round(it.minutes % 60) || ''}`.trim()) : '', n ? `${n} exercise${n === 1 ? '' : 's'}` : '', it.focus || ''].filter(Boolean).join('  ·  ');
+    const meta = [it.minutes ? (it.minutes < 60 ? `${Math.round(it.minutes)} min` : `${Math.floor(it.minutes / 60)} hr ${Math.round(it.minutes % 60) || ''}`.trim()) : '', n ? `${n} exercise${n === 1 ? '' : 's'}` : '', it.focus || '', lastDone(it.id) ? `✓ ${agoLabel(lastDone(it.id))}` : ''].filter(Boolean).join('  ·  ');
     g.fillStyle = soft; g.font = `400 24px ${FONT}`; g.fillText(ellipsis(g, meta, W - 200), 84, ry + 86);
     const saved = isSaved(it.id);
     g.font = `400 44px ${FONT}`; g.textBaseline = 'middle'; g.fillStyle = saved ? red : '#c9d1d8'; g.fillText(saved ? '♥' : '♡', W - 86, ry + 50);
@@ -909,6 +910,8 @@ function drawWorkout(p, it) {
   const n = (it.blocks || []).reduce((k, b) => k + b.exercises.length, 0);
   const meta = [it.minutes ? `${Math.round(it.minutes)} min` : '', n ? `${n} exercises` : '', it.focus, it.equipment].filter(Boolean).join('  ·  ');
   g.fillStyle = soft; g.font = `400 25px ${FONT}`; wrap(g, meta, W - 60, 2).forEach(l => { g.fillText(l, 30, y - 10); y += 34; });
+  const done = lastDone(it.id);
+  if (done) { g.fillStyle = green; g.font = `600 24px ${FONT}`; g.fillText(`✓ Last done ${agoLabel(done)}`, 30, y - 6); y += 34; }
   y += 10;
   const scheme = e => (e.sets && e.reps ? `${e.sets} × ${e.reps}` : e.reps ? e.reps : e.sets ? `${e.sets} sets` : '');
   (it.blocks || []).forEach(b => {
@@ -1099,6 +1102,25 @@ function drawTraining(p) {
   wrap(g, ex.name || '', W - 56, 3).forEach(l => { g.fillText(l, 28, y); y += 72; });
   const scheme = [ex.sets && `${ex.sets} sets`, ex.reps && (ex.sets ? `of ${ex.reps}` : ex.reps)].filter(Boolean).join(' ');
   if (scheme) { g.fillStyle = red; g.font = `600 44px ${FONT}`; g.fillText(scheme, 28, y + 10); y += 70; }
+  // set tracker: tap a magnet to tick off a set; that starts the rest timer
+  const nSets = Math.min(8, parseInt(ex.sets, 10) || 0);
+  if (nSets > 1) {
+    const doneSets = mode.sets[i] || 0, d = 74, gap = 18;
+    for (let k = 0; k < nSets; k++) {
+      const cx = 28 + d / 2 + k * (d + gap), cyy = y + d / 2 - 10, on = k < doneSets;
+      g.lineWidth = 5; g.strokeStyle = on ? green : '#c9d1d8'; g.beginPath(); g.arc(cx, cyy, d / 2 - 4, 0, 7); g.stroke();
+      if (on) { g.fillStyle = green; g.beginPath(); g.arc(cx, cyy, d / 2 - 4, 0, 7); g.fill(); g.strokeStyle = '#fff'; g.lineWidth = 6; g.beginPath(); g.moveTo(cx - 14, cyy); g.lineTo(cx - 4, cyy + 11); g.lineTo(cx + 15, cyy - 11); g.stroke(); }
+      else { g.fillStyle = soft; g.font = `600 28px ${FONT}`; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText(String(k + 1), cx, cyy + 1); g.textAlign = 'left'; g.textBaseline = 'alphabetic'; }
+      p.hits.push({ x: cx - d / 2 - gap / 2, y: cyy - d / 2 - 6, w: d + gap, h: d + 12, fn: () => {
+        const was = mode.sets[i] || 0;
+        mode.sets[i] = k + 1 === was ? k : k + 1;
+        if (mode.sets[i] > was && mode.sets[i] < nSets) startTimer(parseSeconds(ex.rest), () => {});
+        else if (mode.sets[i] >= nSets) { stopTimer(); mode.timerLeft = 0; mode.timerTotal = 0; toast(next ? `All sets done. Next up: ${next.name}` : 'All sets done!'); }
+      } });
+    }
+    g.fillStyle = soft; g.font = `400 22px ${FONT}`; g.fillText(doneSets >= nSets ? 'All sets done' : 'Tap a set when you finish it', 28, y + d + 22);
+    y += d + 50;
+  }
   if (ex.note) { g.fillStyle = soft; g.font = `400 26px ${FONT}`; wrap(g, ex.note, W - 56, 3).forEach(l => { g.fillText(l, 28, y); y += 36; }); }
   // rest timer: a big marker-drawn clock
   const cy = Math.max(y + 150, 640), r = 120;
@@ -1110,6 +1132,10 @@ function drawTraining(p) {
     g.fillText(mode.timerLeft === 0 ? 'Go!' : `${Math.floor(mode.timerLeft / 60)}:${String(mode.timerLeft % 60).padStart(2, '0')}`, W / 2, cy); g.textAlign = 'left';
     p.hits.push({ x: W / 2 - r, y: cy - r, w: r * 2, h: r * 2, fn: () => press('[data-action="timer-stop"]') });
     g.fillStyle = soft; g.font = `400 22px ${FONT}`; g.textAlign = 'center'; g.fillText(mode.timerLeft === 0 ? 'Tap to close' : 'Tap to stop', W / 2, cy + r + 34); g.textAlign = 'left';
+    if (mode.timer) {
+      pill(p, W / 2 - r - 130, cy - 32, 110, 64, '−15s', { stroke: blue, text: blue, font: 26, fn: () => addTime(-15) });
+      pill(p, W / 2 + r + 20, cy - 32, 110, 64, '+15s', { stroke: blue, text: blue, font: 26, fn: () => addTime(15) });
+    }
   } else {
     g.fillStyle = blue; g.font = `600 34px ${FONT}`; g.textAlign = 'center'; g.textBaseline = 'middle';
     g.fillText('Rest', W / 2, cy - 18); g.font = `400 28px ${FONT}`; g.fillText(ex.rest || '90s', W / 2, cy + 24); g.textAlign = 'left';
@@ -1118,9 +1144,14 @@ function drawTraining(p) {
   }
   if (next) { g.fillStyle = soft; g.font = `400 26px ${FONT}`; g.textBaseline = 'alphabetic'; g.fillText(ellipsis(g, `Next: ${next.name}`, W - 56), 28, H - 130); }
   const bw = (W - 64) / 2;
-  pill(p, 24, H - 96, bw, 74, '← Back', { stroke: green, text: green, font: 30, fn: () => { if (i > 0) press('[data-action="mode-prev"]'); } });
+  if (i > 0) pill(p, 24, H - 96, bw, 74, '← Back', { stroke: green, text: green, font: 30, fn: () => press('[data-action="mode-prev"]') });
   if (i < flat.length - 1) pill(p, 40 + bw, H - 96, bw, 74, 'Next →', { fill: green, text: '#fff', font: 30, fn: () => press('[data-action="mode-next"]') });
-  else pill(p, 40 + bw, H - 96, bw, 74, '✓ Finish', { fill: green, text: '#fff', font: 30, fn: () => { location.hash = `#/item/${encodeURIComponent(it.id)}`; } });
+  else pill(p, 40 + bw, H - 96, bw, 74, '✓ Finish', { fill: green, text: '#fff', font: 30, fn: () => {
+    markDone(it.id);
+    const mins = mode.startedAt ? Math.round((Date.now() - mode.startedAt) / 60000) : 0;
+    toast(mins >= 1 ? `Workout done in ${mins} min. Nice work!` : 'Workout done. Nice work!');
+    location.hash = `#/item/${encodeURIComponent(it.id)}`;
+  } });
   p.maxScroll = 0;
   p.tex.needsUpdate = true;
 }
