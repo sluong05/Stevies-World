@@ -822,3 +822,6 @@ body.lib-reading .kit-top { opacity: 0; pointer-events: none; }
   .kit-add span, .kit-wide { display: none; }
 }
 .room-fallback .mode { position: static; }
+
+/* Living room: names are painted on 3D plaques, so the floating label only appears for keyboard focus. */
+.sign.sign-3d:not(:focus-visible) { opacity: 0 !important; }
