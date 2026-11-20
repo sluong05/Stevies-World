@@ -5,6 +5,10 @@
 // Signs are real links laid over the canvas, so everything still works by keyboard and
 // screen reader, and the page keeps a plain list of doors in case WebGL is unavailable.
 import * as THREE from '../vendor/three.module.min.js';
+import { byType, getItem } from './store.js';
+import { toggleTask, toggleStar, quickAdd } from './todo.js';
+import { groupTasks, dueLabel, todayISO } from '../shared/tasks.js';
+import { toast } from './ui.js';
 
 const reduced = typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches;
 let renderer = null, failed = false;
@@ -285,6 +289,20 @@ function livingRoom(night) {
     spots.push({ ...d, pos, target: g.localToWorld(new THREE.Vector3(0, 1.2, 0.6)), mesh: g });
   });
 
+  // a notepad on the coffee table (Add) and a light switch by the gym door (Settings)
+  const pad = new THREE.Group();
+  box(0.34, 0.025, 0.44, 0xfffdf3, 0, 0, 0, pad); box(0.34, 0.03, 0.05, 0xc4513f, 0, 0.005, -0.2, pad);
+  for (let i = 0; i < 5; i++) box(0.24, 0.003, 0.01, 0x9ab0c8, 0, 0.014, -0.1 + i * 0.065, pad);
+  const pen = cyl(0.012, 0.012, 0.3, 0x3a6a8a, 0.22, 0.02, 0, pad, 6); pen.rotation.x = Math.PI / 2;
+  pad.position.set(0.05, 0.475, -1.62); pad.rotation.y = -0.25; scene.add(pad);
+  spots.push({ label: 'Add', sub: 'Notepad', href: '#/add', pos: new THREE.Vector3(0.05, 0.85, -1.62), target: new THREE.Vector3(0.05, 1.2, -0.6), mesh: pad });
+  const sw = new THREE.Group();
+  box(0.16, 0.26, 0.02, 0xf6efe0, 0, 0, 0.01, sw); box(0.05, 0.09, 0.03, night ? 0xd8d2c4 : 0xffffff, 0, night ? -0.03 : 0.03, 0.03, sw);
+  // a bigger invisible pad so the switch is easy to tap
+  const swHit = new THREE.Mesh(new THREE.PlaneGeometry(0.6, 0.7), new THREE.MeshBasicMaterial({ visible: false })); swHit.position.z = 0.04; sw.add(swHit);
+  sw.position.y = 1.3; onWall(sw, 'right', -1.0, W, D); scene.add(sw); sw.updateMatrixWorld(true);
+  spots.push({ label: 'Settings', sub: 'Light switch', href: '#/settings', pos: sw.localToWorld(new THREE.Vector3(0, 0.25, 0.05)), target: sw.localToWorld(new THREE.Vector3(0, -0.1, 1.2)), mesh: sw });
+
   return {
     scene, spots, eye: new THREE.Vector3(0, 1.65, 3.4), yawCenter: Math.PI, yawRange: 1.55, pitch: -0.14,
     update(dt, t) {
@@ -413,6 +431,188 @@ function gym(night) {
   };
 }
 
+// ---------- canvas panels: flat screens and papers drawn with 2D canvas, shown in 3D ----------
+function makePanel(w, h, pxW, pxH) {
+  const canvas = document.createElement('canvas');
+  canvas.width = pxW; canvas.height = pxH;
+  const tex = new THREE.CanvasTexture(canvas);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  tex.anisotropy = 4;
+  const mesh = new THREE.Mesh(new THREE.PlaneGeometry(w, h), new THREE.MeshBasicMaterial({ map: tex }));
+  return { canvas, g: canvas.getContext('2d'), tex, mesh, w, h, hits: [], scroll: 0, maxScroll: 0, dirty: true };
+}
+function rr(g, x, y, w, h, r) { g.beginPath(); g.roundRect ? g.roundRect(x, y, w, h, r) : g.rect(x, y, w, h); }
+function wrap(g, text, maxW, maxLines = 99) {
+  const out = [];
+  for (const para of String(text || '').split('\n')) {
+    let line = '';
+    for (const word of para.split(/\s+/)) {
+      const test = line ? `${line} ${word}` : word;
+      if (g.measureText(test).width > maxW && line) { out.push(line); line = word; } else line = test;
+      if (out.length >= maxLines) break;
+    }
+    out.push(line);
+    if (out.length >= maxLines) break;
+  }
+  if (out.length > maxLines) out.length = maxLines;
+  return out;
+}
+function ellipsis(g, text, maxW) {
+  if (g.measureText(text).width <= maxW) return text;
+  let t = text;
+  while (t.length > 1 && g.measureText(`${t}…`).width > maxW) t = t.slice(0, -1);
+  return `${t}…`;
+}
+const plainText = s => String(s || '').replace(/^#+\s*/gm, '').replace(/[*_`>]/g, '').replace(/^\s*[-•]\s+/gm, '• ').replace(/\[([^\]]+)\]\([^)]*\)/g, '$1');
+const FONT = '"Zen Maru Gothic", "Atkinson Hyperlegible", system-ui, sans-serif';
+const HEAD = '"Kiwi Maru", Georgia, serif';
+
+// The desk monitor: the To-do app on a tall screen.
+function drawTodo(p, night) {
+  const { g, canvas } = p, W = canvas.width, H = canvas.height;
+  const ink = night ? '#eef0dc' : '#2c3a2b', soft = night ? '#aab3c4' : '#6b7866', accent = night ? '#f3c55c' : '#3f6e3c';
+  const bg = g.createLinearGradient(0, 0, 0, H);
+  bg.addColorStop(0, night ? '#1f2a4a' : '#fffaf0'); bg.addColorStop(1, night ? '#151d36' : '#f3eedc');
+  g.fillStyle = bg; g.fillRect(0, 0, W, H);
+  p.hits = [];
+  const today = todayISO();
+  const all = byType('task');
+  const groups = groupTasks(all, today);
+  const open = all.length - groups.done.length;
+  // header
+  g.fillStyle = accent; rr(g, 24, 24, 150, 56, 28); g.fill();
+  g.fillStyle = night ? '#1a2238' : '#fffdf3'; g.font = `600 28px ${FONT}`; g.textBaseline = 'middle'; g.fillText('← Office', 44, 53);
+  p.hits.push({ x: 24, y: 24, w: 150, h: 56, fn: () => { location.hash = '#/office'; } });
+  g.fillStyle = ink; g.font = `500 64px ${HEAD}`; g.textBaseline = 'alphabetic'; g.fillText('To-do', 28, 160);
+  g.fillStyle = soft; g.font = `400 28px ${FONT}`;
+  g.fillText(!all.length ? 'Nothing yet' : open ? `${open} left${groups.overdue.length + groups.today.length ? `, ${groups.overdue.length + groups.today.length} due today` : ''}` : 'All done', 32, 202);
+  // add box (typing goes into a hidden input, painted here)
+  const val = deskInput?.value || '';
+  const typing = document.activeElement === deskInput;
+  g.fillStyle = night ? '#28345c' : '#ffffff'; rr(g, 24, 230, W - 48, 76, 20); g.fill();
+  g.strokeStyle = typing ? accent : (night ? '#3a4770' : '#ddd6c0'); g.lineWidth = 3; g.stroke();
+  g.font = `400 30px ${FONT}`; g.textBaseline = 'middle';
+  g.fillStyle = val ? ink : soft;
+  const shown = ellipsis(g, val || 'Add a to-do…', W - 220);
+  g.fillText(shown, 48, 268);
+  if (typing && Math.floor(performance.now() / 500) % 2) { const cx = 48 + (val ? g.measureText(shown).width : 0) + 2; g.fillStyle = accent; g.fillRect(cx, 248, 3, 40); }
+  g.fillStyle = accent; rr(g, W - 140, 242, 104, 52, 26); g.fill();
+  g.fillStyle = night ? '#1a2238' : '#fffdf3'; g.font = `600 28px ${FONT}`; g.textAlign = 'center'; g.fillText('Add', W - 88, 269); g.textAlign = 'left';
+  p.hits.push({ x: 24, y: 230, w: W - 180, h: 76, fn: () => focusDesk() });
+  p.hits.push({ x: W - 150, y: 230, w: 126, h: 76, fn: () => submitDesk() });
+  // list
+  const top = 330, bottom = H - 16;
+  g.save(); g.beginPath(); g.rect(0, top, W, bottom - top); g.clip();
+  let y = top + 10 - p.scroll;
+  const ROWH = 92;
+  const section = label => { g.fillStyle = soft; g.font = `700 22px ${FONT}`; g.textBaseline = 'alphabetic'; g.fillText(label.toUpperCase(), 32, y + 30); y += 46; };
+  const row = t => {
+    const vis = y + ROWH > top && y < bottom;
+    if (vis) {
+      g.fillStyle = night ? 'rgba(255,255,255,.04)' : 'rgba(255,255,255,.75)'; rr(g, 20, y, W - 40, ROWH - 10, 18); g.fill();
+      // checkbox
+      g.lineWidth = 3; g.strokeStyle = t.done ? accent : soft; rr(g, 38, y + 22, 40, 40, 12); g.stroke();
+      if (t.done) { g.fillStyle = accent; rr(g, 38, y + 22, 40, 40, 12); g.fill(); g.strokeStyle = night ? '#1a2238' : '#fff'; g.lineWidth = 5; g.beginPath(); g.moveTo(47, y + 42); g.lineTo(55, y + 51); g.lineTo(70, y + 33); g.stroke(); }
+      g.fillStyle = t.done ? soft : ink; g.font = `500 30px ${FONT}`; g.textBaseline = 'alphabetic';
+      const title = ellipsis(g, t.title, W - 210);
+      g.fillText(title, 98, y + 40);
+      if (t.done) { g.fillRect(98, y + 30, g.measureText(title).width, 2.5); }
+      const meta = [t.due ? dueLabel(t.due, today) : '', t.repeat ? '↻' : '', t.list ? `#${t.list}` : '', t.steps?.length ? `${t.steps.filter(s => s.done).length}/${t.steps.length}` : ''].filter(Boolean).join('  ·  ');
+      if (meta) { g.font = `400 23px ${FONT}`; g.fillStyle = !t.done && t.due && t.due < today ? '#c4513f' : soft; g.fillText(ellipsis(g, meta, W - 210), 98, y + 70); }
+      // star
+      g.font = `400 40px ${FONT}`; g.fillStyle = t.important ? '#f2a43a' : (night ? '#46517a' : '#d6cfb8'); g.textBaseline = 'middle'; g.fillText(t.important ? '★' : '☆', W - 82, y + 42);
+      if (y > top - 20 && y + ROWH < bottom + 20) {
+        p.hits.push({ x: 20, y, w: 84, h: ROWH - 10, fn: () => toggleTask(t.id).then(m => m && toast(m)) });
+        p.hits.push({ x: W - 100, y, w: 80, h: ROWH - 10, fn: () => toggleStar(t.id) });
+        p.hits.push({ x: 104, y, w: W - 210, h: ROWH - 10, fn: () => { location.hash = `#/item/${encodeURIComponent(t.id)}`; } });
+      }
+    }
+    y += ROWH;
+  };
+  const LABELS = [['overdue', 'Overdue'], ['today', 'Today'], ['upcoming', 'Next 7 days'], ['later', 'Later'], ['someday', 'No date']];
+  for (const [k, label] of LABELS) if (groups[k].length) { section(label); groups[k].forEach(row); }
+  if (groups.done.length) { section('Done'); groups.done.slice(0, 20).forEach(row); }
+  if (!all.length) { g.fillStyle = soft; g.font = `400 28px ${FONT}`; wrap(g, 'Tap the box above and type. Try “call dentist friday #health !” to set a day, a list and a star in one go.', W - 80).forEach((l, i) => g.fillText(l, 40, top + 60 + i * 40)); }
+  g.restore();
+  p.maxScroll = Math.max(0, y + p.scroll - bottom + 20);
+  // scroll hint
+  if (p.maxScroll > 0) { const frac = (bottom - top) / (bottom - top + p.maxScroll); const bh = (bottom - top) * frac; g.fillStyle = night ? 'rgba(255,255,255,.18)' : 'rgba(0,0,0,.15)'; rr(g, W - 10, top + (bottom - top - bh) * (p.scroll / p.maxScroll), 6, bh, 3); g.fill(); }
+  p.tex.needsUpdate = true;
+}
+
+// The corkboard: every note pinned as a paper card; tap one to read it big.
+function rng(seed) { return () => (seed = (seed * 9301 + 49297) % 233280) / 233280; }
+let corkDots = null;
+function drawBoard(p, night) {
+  const { g, canvas } = p, W = canvas.width, H = canvas.height;
+  g.fillStyle = night ? '#9a7448' : '#c89a5a'; g.fillRect(0, 0, W, H);
+  if (!corkDots) { const r = rng(5); corkDots = Array.from({ length: 700 }, () => [r() * W, r() * H, r() * 2.4 + 0.6, r() > 0.5]); }
+  corkDots.forEach(([x, y, s, d]) => { g.fillStyle = d ? 'rgba(90,55,25,.35)' : 'rgba(255,230,190,.25)'; g.fillRect(x, y, s, s); });
+  p.hits = [];
+  const notes = byType('note').sort((a, b) => (b.updatedAt || b.createdAt || 0) - (a.updatedAt || a.createdAt || 0));
+  const paper = (x, y, w, h, color, rot) => { g.save(); g.translate(x + w / 2, y + h / 2); g.rotate(rot); g.shadowColor = 'rgba(40,20,5,.35)'; g.shadowBlur = 14; g.shadowOffsetY = 6; g.fillStyle = color; g.fillRect(-w / 2, -h / 2, w, h); g.restore(); };
+  const pin = (x, y) => { g.fillStyle = '#c4513f'; g.beginPath(); g.arc(x, y, 11, 0, 7); g.fill(); g.fillStyle = 'rgba(255,255,255,.6)'; g.beginPath(); g.arc(x - 3, y - 3, 3.5, 0, 7); g.fill(); };
+  const button = (x, y, w, label, fn, filled = true) => {
+    g.fillStyle = filled ? '#3f6e3c' : '#fffdf3'; rr(g, x, y, w, 56, 28); g.fill();
+    g.fillStyle = filled ? '#fffdf3' : '#3f6e3c'; g.font = `600 27px ${FONT}`; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText(label, x + w / 2, y + 29); g.textAlign = 'left';
+    p.hits.push({ x, y, w, h: 56, fn });
+  };
+  const openNote = p.open && getItem(p.open);
+  if (openNote) {
+    paper(30, 30, W - 60, H - 60, '#fffdf3', -0.004); pin(W / 2, 52);
+    button(56, 78, 170, '← Board', () => { p.open = null; p.scroll = 0; p.dirty = true; }, false);
+    button(W - 196, 78, 140, 'Edit', () => { location.hash = `#/edit/${encodeURIComponent(openNote.id)}`; });
+    g.fillStyle = '#2c3a2b'; g.font = `500 48px ${HEAD}`; g.textBaseline = 'alphabetic';
+    const tl = wrap(g, openNote.title || 'Untitled', W - 140, 3);
+    tl.forEach((l, i) => g.fillText(l, 64, 200 + i * 56));
+    let y = 200 + tl.length * 56;
+    if (openNote.category) { g.fillStyle = '#6b7866'; g.font = `400 24px ${FONT}`; g.fillText(openNote.category, 66, y); y += 24; }
+    g.strokeStyle = '#e3d9bd'; g.lineWidth = 2; g.beginPath(); g.moveTo(64, y + 10); g.lineTo(W - 64, y + 10); g.stroke();
+    const top = y + 30, bottom = H - 50;
+    g.save(); g.beginPath(); g.rect(40, top, W - 80, bottom - top); g.clip();
+    g.font = `400 29px ${FONT}`; g.fillStyle = '#2c3a2b';
+    const lines = wrap(g, plainText(openNote.body), W - 140);
+    lines.forEach((l, i) => { const ly = top + 34 + i * 42 - p.scroll; if (ly > top - 40 && ly < bottom + 40) g.fillText(l, 66, ly); });
+    if (openNote.sourceUrl) { const ly = top + 34 + lines.length * 42 + 20 - p.scroll; g.fillStyle = '#3f6e3c'; g.fillText(ellipsis(g, openNote.sourceUrl, W - 140), 66, ly); }
+    g.restore();
+    p.maxScroll = Math.max(0, lines.length * 42 + 120 - (bottom - top));
+  } else {
+    // header strip
+    paper(W / 2 - 170, 26, 340, 90, '#fff3c8', 0.01); pin(W / 2, 40);
+    g.fillStyle = '#2c3a2b'; g.font = `500 48px ${HEAD}`; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText('Notes', W / 2, 78); g.textAlign = 'left';
+    button(24, 40, 150, '← Office', () => { location.hash = '#/office'; }, false);
+    const top = 140, bottom = H - 10;
+    g.save(); g.beginPath(); g.rect(0, top, W, bottom - top); g.clip();
+    const cw = (W - 3 * 28) / 2, ch = 300;
+    const tints = ['#fffdf3', '#fff3c8', '#e1ead0', '#f6dcd3', '#dff0ff'];
+    const cards = [{ add: true }, ...notes];
+    cards.forEach((n, i) => {
+      const col = i % 2, r = Math.floor(i / 2);
+      const x = 28 + col * (cw + 28), y = top + 16 + r * (ch + 26) - p.scroll;
+      if (y > bottom || y + ch < top) return;
+      const rot = ((i * 37) % 7 - 3) * 0.006;
+      if (n.add) {
+        g.save(); g.translate(x + cw / 2, y + ch / 2); g.rotate(rot); g.setLineDash([14, 10]); g.strokeStyle = '#fffdf3'; g.lineWidth = 4; g.strokeRect(-cw / 2 + 6, -ch / 2 + 6, cw - 12, ch - 12); g.restore();
+        g.fillStyle = '#fffdf3'; g.font = `500 80px ${FONT}`; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText('+', x + cw / 2, y + ch / 2 - 24);
+        g.font = `600 30px ${FONT}`; g.fillText('New note', x + cw / 2, y + ch / 2 + 44); g.textAlign = 'left';
+        p.hits.push({ x, y, w: cw, h: ch, fn: () => { location.hash = '#/new/note'; } });
+        return;
+      }
+      paper(x, y, cw, ch, tints[i % tints.length], rot); pin(x + cw / 2, y + 16);
+      g.fillStyle = '#2c3a2b'; g.font = `600 30px ${FONT}`; g.textBaseline = 'alphabetic';
+      const tl = wrap(g, n.title || 'Untitled', cw - 44, 2);
+      tl.forEach((l, k) => g.fillText(ellipsis(g, l, cw - 44), x + 22, y + 66 + k * 38));
+      g.fillStyle = '#5e6c57'; g.font = `400 23px ${FONT}`;
+      wrap(g, plainText(n.body), cw - 44, 6 - tl.length).forEach((l, k) => g.fillText(ellipsis(g, l, cw - 44), x + 22, y + 74 + tl.length * 38 + k * 32));
+      if (n.category) { g.fillStyle = '#3f6e3c'; g.font = `600 20px ${FONT}`; g.fillText(ellipsis(g, n.category.toUpperCase(), cw - 44), x + 22, y + ch - 22); }
+      p.hits.push({ x, y, w: cw, h: ch, fn: () => { p.open = n.id; p.scroll = 0; p.dirty = true; } });
+    });
+    g.restore();
+    p.maxScroll = Math.max(0, top + 16 + Math.ceil(cards.length / 2) * (ch + 26) - bottom);
+  }
+  p.tex.needsUpdate = true;
+}
+
 function office(night) {
   const scene = new THREE.Scene();
   const W = 8, D = 8;
@@ -420,88 +620,118 @@ function office(night) {
   scene.children[0].material.map.repeat.set(3, 3);
   lights(scene, night);
   const spots = [];
-  // desk with a laptop, lamp, mug and the to-do clipboard
+  // desk with a tall monitor (the To-do screen), keyboard, lamp and mug
   const desk = new THREE.Group();
   box(2.4, 0.08, 0.9, 0x8a5a3a, 0, 0.78, 0.45, desk);
   [[-1.1, 0.1], [1.1, 0.1], [-1.1, 0.8], [1.1, 0.8]].forEach(([x, z]) => box(0.07, 0.76, 0.07, 0x6b4430, x, 0.38, z, desk));
   box(0.6, 0.6, 0.8, 0x7a4e33, 0.75, 0.42, 0.45, desk);
-  const laptop = new THREE.Group();
-  box(0.6, 0.03, 0.4, 0x9aa3ab, 0, 0, 0, laptop);
-  const screen = box(0.6, 0.4, 0.02, 0x9aa3ab, 0, 0.2, -0.2, laptop); screen.rotation.x = -0.2;
-  const glowScreen = box(0.54, 0.34, 0.01, glow(night ? 0x9ac8ff : 0xdff0ff), 0, 0.2, -0.185, laptop); glowScreen.rotation.x = -0.2;
-  laptop.position.set(-0.1, 0.84, 0.45); desk.add(laptop);
+  const monitor = new THREE.Group();
+  box(0.68, 1.06, 0.05, 0x2b2f36, 0, 0, -0.03, monitor);
+  cyl(0.04, 0.05, 0.3, 0x2b2f36, 0, -0.62, -0.08, monitor, 10); box(0.34, 0.03, 0.22, 0x2b2f36, 0, -0.77, -0.06, monitor);
+  const todoPanel = makePanel(0.6, 0.96, 640, 1024);
+  monitor.add(todoPanel.mesh); todoPanel.mesh.position.z = 0.001;
+  monitor.position.set(-0.2, 1.4, 0.32); desk.add(monitor);
+  const screenGlow = new THREE.PointLight(night ? 0x9ac8ff : 0xfff6e0, night ? 2 : 0.6, 2.5); screenGlow.position.set(-0.2, 1.4, 0.8); desk.add(screenGlow);
+  box(0.6, 0.025, 0.2, 0xe9e4d6, -0.2, 0.83, 0.7, desk);
   const lamp = new THREE.Group();
   cyl(0.12, 0.14, 0.03, 0x2b4a3a, 0, 0, 0, lamp); const arm = cyl(0.015, 0.015, 0.5, 0x2b4a3a, 0, 0.25, 0, lamp, 6); arm.rotation.z = 0.25;
   const head = cyl(0.06, 0.14, 0.16, 0x2b4a3a, -0.1, 0.5, 0, lamp, 12); head.rotation.z = 0.7;
   const lampLight = new THREE.PointLight(0xffd08a, night ? 5 : 2, 3, 1.6); lampLight.position.set(-0.2, 0.4, 0); lamp.add(lampLight);
   lamp.position.set(0.85, 0.83, 0.3); desk.add(lamp);
-  const mugD = cyl(0.06, 0.05, 0.12, 0xc4513f, 0.55, 0.88, 0.7, desk, 12);
-  // clipboard (To-do)
-  const clip = new THREE.Group();
-  box(0.36, 0.02, 0.48, 0x9a6e44, 0, 0, 0, clip); box(0.3, 0.01, 0.4, 0xffffff, 0, 0.015, 0.02, clip); box(0.12, 0.03, 0.05, 0x9aa3ab, 0, 0.02, -0.22, clip);
-  for (let i = 0; i < 4; i++) { box(0.035, 0.012, 0.035, i < 2 ? 0x5f9a45 : 0xc8c8c8, -0.1, 0.022, -0.1 + i * 0.09, clip); box(0.15, 0.012, 0.012, 0x888888, 0.03, 0.022, -0.1 + i * 0.09, clip); }
-  clip.position.set(-0.85, 0.83, 0.65); clip.rotation.y = 0.2; desk.add(clip);
-  // chair
+  cyl(0.06, 0.05, 0.12, 0xc4513f, 0.55, 0.88, 0.7, desk, 12);
   const chair = new THREE.Group();
   box(0.55, 0.08, 0.55, 0x3a6a8a, 0, 0.5, 0, chair); box(0.55, 0.6, 0.08, 0x3a6a8a, 0, 0.85, 0.26, chair); cyl(0.04, 0.04, 0.45, 0x3a3f47, 0, 0.25, 0, chair, 8);
-  chair.position.set(-0.1, 0, 1.3); desk.add(chair);
-  onWall(desk, 'back', -0.6, W, D); scene.add(desk);
+  chair.position.set(-0.1, 0, 1.4); desk.add(chair);
+  onWall(desk, 'back', -1.1, W, D); scene.add(desk);
   const steam = smoke(scene, desk.localToWorld(new THREE.Vector3(0.55, 0.96, 0.7)), 4);
-  // corkboard (Notes) with pinned papers
+  // tall corkboard (Notes)
   const board = new THREE.Group();
-  box(1.6, 1.05, 0.05, 0xc89a5a, 0, 0, 0.02, board); box(1.7, 1.15, 0.03, 0x7a4e33, 0, 0, 0.0, board);
-  const papers = [];
-  [[-0.5, 0.22, 0xfff3c8, 0.1], [-0.05, 0.25, 0xffffff, -0.08], [0.45, 0.18, 0xf6dcd3, 0.12], [-0.35, -0.24, 0xe1ead0, -0.1], [0.2, -0.22, 0xfff3c8, 0.06], [0.58, -0.28, 0xdff0ff, -0.05]].forEach(([x, y, c, r]) => {
-    const p = box(0.34, 0.38, 0.01, c, x, y, 0.06, board); p.rotation.z = r; papers.push(p);
-    const pin = new THREE.Mesh(new THREE.SphereGeometry(0.025, 8, 6), mat(0xc4513f)); pin.position.set(x, y + 0.15, 0.08); board.add(pin);
-  });
-  board.position.y = 2.0; onWall(board, 'back', -0.6, W, D); scene.add(board);
-  // bookshelf, plant, window, a radiator cat bed
+  box(1.32, 1.82, 0.03, 0x7a4e33, 0, 0, 0, board);
+  const boardPanel = makePanel(1.2, 1.7, 768, 1088);
+  board.add(boardPanel.mesh); boardPanel.mesh.position.z = 0.02;
+  board.position.y = 1.65; onWall(board, 'back', 2.0, W, D); scene.add(board);
+  // bookshelf, plant, window
   const shelf = new THREE.Group();
   box(1.0, 2.1, 0.32, 0x7a4e33, 0, 1.05, 0.16, shelf);
   const spines = [0xc4513f, 0x3a6a8a, 0xf0d39a, 0x5f7f5a, 0x8a5a9a];
   [0.35, 0.95, 1.55].forEach((y, r) => { for (let i = 0; i < 6; i++) box(0.12, 0.36, 0.24, spines[(i + r) % 5], -0.35 + i * 0.14, y + 0.2, 0.18, shelf); });
   onWall(shelf, 'left', -1.6, W, D); scene.add(shelf);
-  plant(3.3, -3.3, scene, 1.4);
+  plant(-3.3, -3.3, scene, 1.3);
   const win = windowPane(night ? 0x1d2a52 : 0xa9d4ef, night, scene, 1.4, 1.2); win.position.y = 1.7; onWall(win, 'right', -1.4, W, D);
   const back = door({ color: 0x7b8f4a }); onWall(back, 'front', 0, W, D); scene.add(back);
+  scene.updateMatrixWorld(true);
+  const focusOf = mesh => {
+    const center = mesh.getWorldPosition(new THREE.Vector3());
+    const normal = new THREE.Vector3(0, 0, 1).applyQuaternion(mesh.getWorldQuaternion(new THREE.Quaternion()));
+    return { center, normal, w: mesh.geometry.parameters.width, h: mesh.geometry.parameters.height, mesh };
+  };
   const at = (o, v) => o.localToWorld(new THREE.Vector3(...v));
-  desk.updateMatrixWorld(true); board.updateMatrixWorld(true);
-  spots.push({ label: 'To-do', sub: 'Clipboard', href: '#/todo', pos: at(desk, [-0.85, 1.05, 0.65]), target: at(desk, [-0.6, 1.4, 1.6]), mesh: clip });
-  spots.push({ label: 'Notes', sub: 'Corkboard', href: '#/notes', pos: at(board, [0, 0.72, 0.1]), target: at(board, [0, -0.2, 1.4]), mesh: board });
+  spots.push({ label: 'To-do', sub: 'Monitor', href: '#/todo', pos: at(monitor, [0, 0.6, 0]), target: at(monitor, [0, 0, 1]), mesh: monitor, here: true });
+  spots.push({ label: 'Notes', sub: 'Corkboard', href: '#/notes', pos: at(board, [0, 0.98, 0.05]), target: at(board, [0, 0, 1.2]), mesh: board, here: true });
   spots.push({ label: 'Living room', href: '#/', pos: back.localToWorld(new THREE.Vector3(0, 2.52, 0.1)), target: back.localToWorld(new THREE.Vector3(0, 1.2, 0.6)), mesh: back, back: true });
+  const panels = { monitor: todoPanel, board: boardPanel };
+  const draw = { monitor: () => drawTodo(todoPanel, night), board: () => drawBoard(boardPanel, night) };
+  let blink = 0;
   return {
-    scene, spots, eye: new THREE.Vector3(0, 1.7, 2.4), yawCenter: Math.PI, yawRange: 1.0, pitch: -0.16,
-    update(dt, t) { steam(t); papers.forEach((p, i) => { p.rotation.z += Math.sin(t * 1.5 + i) * 0.0008; }); void mugD; },
+    scene, spots, eye: new THREE.Vector3(0, 1.7, 2.4), yawCenter: Math.PI, yawRange: 1.0, pitch: -0.12,
+    focus: { monitor: focusOf(todoPanel.mesh), board: focusOf(boardPanel.mesh) },
+    panels,
+    refresh() { todoPanel.dirty = true; boardPanel.dirty = true; },
+    update(dt, t) {
+      steam(t);
+      const b = Math.floor(t * 2);
+      if (b !== blink && document.activeElement === deskInput) { blink = b; todoPanel.dirty = true; }
+      for (const k of ['monitor', 'board']) if (panels[k].dirty) { panels[k].dirty = false; draw[k](); }
+    },
   };
 }
 
 const ROOMS = { living: livingRoom, kitchen, gym, office };
 
+// ---------- typing on the monitor ----------
+let deskInput = null;
+function focusDesk() { deskInput?.focus({ preventScroll: true }); if (room?.panels) room.panels.monitor.dirty = true; }
+async function submitDesk() {
+  const text = deskInput?.value.trim();
+  if (!text) { focusDesk(); return; }
+  const saved = await quickAdd(text);
+  if (saved) { deskInput.value = ''; toast(`Added “${saved.title}”`); }
+  if (room?.panels) room.panels.monitor.dirty = true;
+}
+
 // ---------- engine ----------
 function ensure() {
   if (renderer || failed) return renderer;
-  try { renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'low-power' }); } catch { failed = true; return null; }
+  try { renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'low-power' }); } catch { failed = true; document.body.classList.add('world-failed'); return null; }
   renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
   renderer.outputColorSpace = THREE.SRGBColorSpace;
   host = document.getElementById('world');
   signs = document.getElementById('signs');
   host.append(renderer.domElement);
-  renderer.domElement.addEventListener('webglcontextlost', e => { e.preventDefault(); failed = true; stop(); document.body.classList.remove('world-live'); });
+  deskInput = document.createElement('input');
+  deskInput.className = 'lib-hidden-input'; deskInput.id = 'desk-input';
+  deskInput.setAttribute('aria-label', 'Add a to-do'); deskInput.setAttribute('enterkeyhint', 'done'); deskInput.autocomplete = 'off';
+  document.body.append(deskInput);
+  deskInput.addEventListener('input', () => { if (room?.panels) room.panels.monitor.dirty = true; });
+  deskInput.addEventListener('blur', () => { if (room?.panels) room.panels.monitor.dirty = true; });
+  deskInput.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); submitDesk(); } });
+  renderer.domElement.addEventListener('webglcontextlost', e => { e.preventDefault(); failed = true; stop(); document.body.classList.remove('world-live'); document.body.classList.add('world-failed'); });
   addEventListener('resize', () => { resize(); wake(); });
   addEventListener('scroll', onScroll, { passive: true });
   document.addEventListener('visibilitychange', wake);
-  // Drag anywhere over the room stage to look around; tap a door to walk through.
+  // Drag over the stage to look around (or scroll a screen when zoomed in); tap to use things.
   let down = null;
   document.addEventListener('pointerdown', e => {
     if (!room || !e.target.closest?.('.room-stage') || e.target.closest('a,button,input,select,textarea')) return;
-    down = { x: e.clientX, y: e.clientY, lx: e.clientX, t: performance.now() };
+    down = { x: e.clientX, y: e.clientY, lx: e.clientX, ly: e.clientY, t: performance.now() };
   });
   document.addEventListener('pointermove', e => {
     if (!down) return;
-    const dx = (e.clientX - down.lx) / innerWidth;
-    down.lx = e.clientX;
-    yawVel += dx * 2.2;
+    const dx = (e.clientX - down.lx) / innerWidth, dy = e.clientY - down.ly;
+    down.lx = e.clientX; down.ly = e.clientY;
+    const p = focusName && room.panels?.[focusName];
+    if (p) { p.scroll = Math.max(0, Math.min(p.maxScroll, p.scroll - dy * (p.canvas.height / (host.clientHeight * 0.9)))); p.dirty = true; }
+    else yawVel += dx * 2.2;
     wake();
   });
   document.addEventListener('pointerup', e => {
@@ -509,6 +739,11 @@ function ensure() {
     down = null;
   });
   document.addEventListener('pointercancel', () => { down = null; });
+  addEventListener('wheel', e => {
+    const p = focusName && room?.panels?.[focusName];
+    if (!p || !e.target.closest?.('.room-stage')) return;
+    p.scroll = Math.max(0, Math.min(p.maxScroll, p.scroll + e.deltaY)); p.dirty = true; wake();
+  }, { passive: true });
   signs.addEventListener('click', e => {
     const a = e.target.closest('a[data-spot]');
     if (!a) return;
@@ -523,6 +758,18 @@ function tapAt(x, y) {
   if (!room) return;
   const r = renderer.domElement.getBoundingClientRect();
   ray.setFromCamera(new THREE.Vector2(((x - r.left) / r.width) * 2 - 1, -((y - r.top) / r.height) * 2 + 1), room.camera);
+  const p = focusName && room.panels?.[focusName];
+  if (p) {
+    const hit = ray.intersectObject(p.mesh)[0];
+    if (!hit?.uv) { if (deskInput && document.activeElement === deskInput) deskInput.blur(); return; }
+    const cx = hit.uv.x * p.canvas.width, cy = (1 - hit.uv.y) * p.canvas.height;
+    for (let i = p.hits.length - 1; i >= 0; i--) {
+      const h = p.hits[i];
+      if (cx >= h.x && cx <= h.x + h.w && cy >= h.y && cy <= h.y + h.h) { h.fn(); p.dirty = true; wake(); return; }
+    }
+    if (document.activeElement === deskInput) deskInput.blur();
+    return;
+  }
   for (const s of room.spots) {
     if (ray.intersectObject(s.mesh, true).length) { walkTo(s, s.href); return; }
   }
@@ -530,7 +777,7 @@ function tapAt(x, y) {
 
 function walkTo(spot, href) {
   if (!spot || flying) return;
-  if (reduced) { location.hash = href; return; }
+  if (reduced || spot.here) { location.hash = href; return; }
   const cam = room.camera;
   const dir = new THREE.Vector3(); cam.getWorldDirection(dir);
   flying = { t: 0, from: cam.position.clone(), to: spot.target.clone(), look0: cam.position.clone().add(dir), look1: spot.pos.clone().setY(1.3), href };
@@ -556,7 +803,9 @@ function onScroll() {
   if (stageVisible && !was) wake();
 }
 
-const tmp = new THREE.Vector3();
+let focusName = null, snap = true;
+const camPos = new THREE.Vector3(), camLook = new THREE.Vector3();
+const want = new THREE.Vector3(), wantLook = new THREE.Vector3();
 function frame() {
   raf = 0;
   if (!room) return;
@@ -567,23 +816,35 @@ function frame() {
     flying.t = Math.min(1, flying.t + dt / 0.75);
     const k = flying.t * flying.t * (3 - 2 * flying.t);
     cam.position.lerpVectors(flying.from, flying.to, k);
-    cam.lookAt(tmp.lerpVectors(flying.look0, flying.look1, Math.min(1, k * 1.6)));
+    cam.lookAt(wantLook.lerpVectors(flying.look0, flying.look1, Math.min(1, k * 1.6)));
     host.style.opacity = String(1 - Math.max(0, (flying.t - 0.6) / 0.4));
     if (flying.t >= 1) { const href = flying.href; flying = null; location.hash = href; }
   } else {
-    yawUser += yawVel * 0.12; yawVel *= 0.9;
-    const auto = reduced ? 0 : Math.sin(t * 0.09) * room.yawRange * 0.85;
-    yawUser = Math.max(-room.yawRange - auto, Math.min(room.yawRange - auto, yawUser));
-    const yaw = room.yawCenter + auto + yawUser;
-    cam.position.copy(room.eye);
-    cam.position.y += reduced ? 0 : Math.sin(t * 0.7) * 0.015;
-    cam.lookAt(tmp.set(room.eye.x + Math.sin(yaw), room.eye.y + room.pitch, room.eye.z + Math.cos(yaw)));
-    if (!reduced) room.update(dt, t);
+    const f = focusName && room.focus?.[focusName];
+    if (f) {
+      const tanv = Math.tan((cam.fov * Math.PI) / 360);
+      const d = Math.max(f.h / 2 / tanv, f.w / 2 / (tanv * cam.aspect)) * 1.04;
+      want.copy(f.center).addScaledVector(f.normal, d);
+      wantLook.copy(f.center);
+    } else {
+      yawUser += yawVel * 0.12; yawVel *= 0.9;
+      const auto = reduced ? 0 : Math.sin(t * 0.09) * room.yawRange * 0.85;
+      yawUser = Math.max(-room.yawRange - auto, Math.min(room.yawRange - auto, yawUser));
+      const yaw = room.yawCenter + auto + yawUser;
+      want.copy(room.eye); want.y += reduced ? 0 : Math.sin(t * 0.7) * 0.015;
+      wantLook.set(room.eye.x + Math.sin(yaw), room.eye.y + room.pitch, room.eye.z + Math.cos(yaw));
+    }
+    const a = snap || reduced ? 1 : 1 - Math.exp(-dt * 4.5);
+    snap = false;
+    camPos.lerp(want, a); camLook.lerp(wantLook, a);
+    cam.position.copy(camPos); cam.lookAt(camLook);
+    room.update(reduced ? 0 : dt, t);
   }
   renderer.render(room.scene, cam);
   placeSigns();
   document.body.classList.add('world-live');
-  if (!reduced || flying) if (stageVisible && !document.hidden) raf = requestAnimationFrame(frame);
+  const settling = camPos.distanceToSquared(want) > 1e-6;
+  if (!reduced || flying || settling || room.panels) if (stageVisible && !document.hidden) raf = requestAnimationFrame(frame);
 }
 function wake() { if (!raf && room && renderer) { if (clock) clock.getDelta(); raf = requestAnimationFrame(frame); } }
 function stop() { if (raf) cancelAnimationFrame(raf); raf = 0; }
@@ -599,7 +860,7 @@ function placeSigns() {
     if (!el) return;
     v.copy(s.pos).project(room.camera);
     const y = top + (1 - v.y) / 2 * h;
-    const on = v.z < 1 && Math.abs(v.x) < 1.05 && y > 70 && y < limit - 8;
+    const on = !focusName && v.z < 1 && Math.abs(v.x) < 1.05 && y > 20 && y < limit - 8;
     el.classList.toggle('off', !on);
     if (on) el.style.transform = `translate(${((v.x + 1) / 2 * w).toFixed(1)}px, ${y.toFixed(1)}px) translate(-50%, -100%)`;
   });
@@ -612,11 +873,13 @@ function disposeRoom() {
 }
 
 // Show a room (or null to hide the house, e.g. on the Library or an item page).
-export function show(name, theme) {
+// focus zooms the camera onto something in the room ('monitor' or 'board' in the office).
+export function show(name, theme, focus = null) {
   if (!name || theme === 'plain') {
-    stop(); disposeRoom();
+    stop(); disposeRoom(); focusName = null;
     document.body.classList.remove('world-live', 'world-walking');
     if (signs) signs.innerHTML = '';
+    deskInput?.blur();
     return;
   }
   if (!ensure()) return;
@@ -631,10 +894,12 @@ export function show(name, theme) {
     room.scene.background = new THREE.Color(night ? 0x1a1410 : 0xf3e6cc);
     room.scene.updateMatrixWorld(true);
     clock = new THREE.Clock();
-    yawUser = 0; yawVel = 0; flying = null;
+    yawUser = 0; yawVel = 0; flying = null; snap = true;
     signs.innerHTML = room.spots.map((s, i) => `<a class="sign ${s.back ? 'sign-back' : ''}" data-spot="${i}" href="${s.href}"><strong>${s.back ? '← ' : ''}${s.label}</strong>${s.sub ? `<small>${s.sub}</small>` : ''}</a>`).join('');
   }
-  stage = document.querySelector('.room-stage');
-  void stage;
+  if (focus !== focusName && room.panels) { for (const p of Object.values(room.panels)) { p.scroll = 0; p.open = null; } }
+  focusName = room.focus?.[focus] ? focus : null;
+  if (focusName !== 'monitor') deskInput?.blur();
+  room.refresh?.();
   resize(); onScroll(); wake();
 }
