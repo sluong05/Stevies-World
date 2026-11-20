@@ -6,7 +6,7 @@
 // screen reader, and the page keeps a plain list of doors in case WebGL is unavailable.
 import * as THREE from '../vendor/three.module.min.js';
 import { byType, getItem, isSaved, search, toggleSaved, syncState } from './store.js';
-import { toggleTask, toggleStar, quickAdd } from './todo.js';
+import { toggleTask, toggleStar, toggleStep, quickAdd } from './todo.js';
 import { groupTasks, dueLabel, todayISO } from '../shared/tasks.js';
 import { toast } from './ui.js';
 import { editing } from './editor.js';
@@ -1048,6 +1048,61 @@ function drawTraining(p) {
   p.tex.needsUpdate = true;
 }
 
+// A single to-do, opened on the desk monitor.
+function drawTask(p, t, night) {
+  const { g, canvas } = p, W = canvas.width, H = canvas.height;
+  const ink = night ? '#eef0dc' : '#2c3a2b', soft = night ? '#aab3c4' : '#6b7866', accent = night ? '#f3c55c' : '#3f6e3c', on = night ? '#1a2238' : '#fffdf3';
+  const bg = g.createLinearGradient(0, 0, 0, H); bg.addColorStop(0, night ? '#1f2a4a' : '#fffaf0'); bg.addColorStop(1, night ? '#151d36' : '#f3eedc');
+  g.fillStyle = bg; g.fillRect(0, 0, W, H);
+  p.hits = [];
+  const today = todayISO();
+  pill(p, 24, 24, 150, 56, '← To-do', { fill: accent, text: on, fn: () => { location.hash = '#/todo'; } });
+  pill(p, W - 140, 24, 116, 56, 'Edit', { stroke: accent, text: accent, fn: () => { location.hash = `#/edit/${encodeURIComponent(t.id)}`; } });
+  // big checkbox + title
+  g.lineWidth = 4; g.strokeStyle = t.done ? accent : soft; rr(g, 28, 120, 56, 56, 16); g.stroke();
+  if (t.done) { g.fillStyle = accent; rr(g, 28, 120, 56, 56, 16); g.fill(); g.strokeStyle = on; g.lineWidth = 6; g.beginPath(); g.moveTo(40, 148); g.lineTo(52, 161); g.lineTo(73, 135); g.stroke(); }
+  p.hits.push({ x: 20, y: 112, w: 72, h: 72, fn: () => toggleTask(t.id).then(m => m && toast(m)) });
+  g.fillStyle = ink; g.font = `500 44px ${HEAD}`; g.textBaseline = 'alphabetic';
+  let y = 164;
+  wrap(g, t.title, W - 130, 3).forEach(l => { g.fillText(l, 104, y); y += 52; });
+  if (t.done) { g.fillStyle = soft; g.font = `400 24px ${FONT}`; g.fillText('Done', 104, y); y += 34; }
+  y += 6;
+  // star + facts
+  const star = t.important;
+  pill(p, 28, y, 220, 54, star ? '★ Important' : '☆ Mark important', { fill: star ? '#f2a43a' : null, stroke: '#f2a43a', text: star ? '#fff' : '#c88a1a', font: 23, fn: () => toggleStar(t.id) });
+  y += 80;
+  const facts = [
+    t.due ? ['When', dueLabel(t.due, today), !t.done && t.due < today] : null,
+    t.repeat ? ['Repeats', { daily: 'Every day', weekdays: 'Every weekday', weekly: 'Every week', biweekly: 'Every 2 weeks', monthly: 'Every month', yearly: 'Every year' }[t.repeat] || t.repeat] : null,
+    t.list ? ['List', `#${t.list}`] : null,
+  ].filter(Boolean);
+  facts.forEach(([k, v, late]) => {
+    g.fillStyle = soft; g.font = `600 21px ${FONT}`; g.fillText(k.toUpperCase(), 30, y);
+    g.fillStyle = late ? '#c4513f' : ink; g.font = `500 28px ${FONT}`; g.fillText(v, 200, y + 2); y += 46;
+  });
+  // steps
+  if (t.steps?.length) {
+    y += 10; g.fillStyle = soft; g.font = `600 21px ${FONT}`; g.fillText(`STEPS  ${t.steps.filter(s => s.done).length}/${t.steps.length}`, 30, y); y += 20;
+    t.steps.forEach((st, i) => {
+      if (y > H - 120) return;
+      g.lineWidth = 3; g.strokeStyle = st.done ? accent : soft; rr(g, 30, y + 10, 36, 36, 10); g.stroke();
+      if (st.done) { g.fillStyle = accent; rr(g, 30, y + 10, 36, 36, 10); g.fill(); }
+      g.fillStyle = st.done ? soft : ink; g.font = `400 26px ${FONT}`; const tx = ellipsis(g, st.text, W - 120); g.fillText(tx, 82, y + 38);
+      if (st.done) g.fillRect(82, y + 30, g.measureText(tx).width, 2.5);
+      p.hits.push({ x: 20, y: y + 2, w: W - 40, h: 52, fn: () => toggleStep(t.id, i) });
+      y += 56;
+    });
+  }
+  if (t.note) {
+    y += 16; g.fillStyle = soft; g.font = `600 21px ${FONT}`; g.fillText('NOTES', 30, y); y += 38;
+    g.fillStyle = ink; g.font = `400 25px ${FONT}`;
+    wrap(g, plainText(t.note), W - 60).forEach(l => { if (y < H - 30) { g.fillText(l, 30, y); y += 34; } });
+  }
+  if (t.sourceUrl && y < H - 40) { y += 10; g.fillStyle = accent; g.font = `400 24px ${FONT}`; g.fillText(ellipsis(g, t.sourceUrl, W - 60), 30, y); p.hits.push({ x: 24, y: y - 30, w: W - 48, h: 44, fn: () => window.open(t.sourceUrl, '_blank', 'noopener') }); }
+  p.maxScroll = 0;
+  p.tex.needsUpdate = true;
+}
+
 function office(night) {
   const scene = new THREE.Scene();
   const W = 8, D = 8;
@@ -1100,7 +1155,7 @@ function office(night) {
   spots.push({ label: 'Notes', sub: 'Corkboard', href: '#/notes', pos: at(board, [0, 0.98, 0.05]), target: at(board, [0, 0, 1.2]), mesh: board, here: true });
   spots.push({ label: 'Living room', href: '#/', pos: back.localToWorld(new THREE.Vector3(0, 2.52, 0.1)), target: back.localToWorld(new THREE.Vector3(0, 1.2, 0.6)), mesh: back, back: true });
   const panels = { monitor: todoPanel, board: boardPanel };
-  const draw = { monitor: () => drawTodo(todoPanel, night), board: () => (detailId === 'edit' ? drawNoteEditor(boardPanel) : drawBoard(boardPanel, night)) };
+  const draw = { monitor: () => { const t = detailId?.startsWith?.('task:') && getItem(detailId.slice(5)); if (t) drawTask(todoPanel, t, night); else drawTodo(todoPanel, night); }, board: () => (detailId === 'edit' ? drawNoteEditor(boardPanel) : drawBoard(boardPanel, night)) };
   let blink = 0;
   return {
     scene, spots, eye: new THREE.Vector3(0, 1.7, 2.4), yawCenter: Math.PI, yawRange: 1.0, pitch: -0.12,

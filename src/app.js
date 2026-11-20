@@ -105,6 +105,7 @@ Object.assign(FOCUS_OF, { add: 'notepad', settings: 'panel' });
 // Which room (and what to zoom onto) a route lives in.
 function viewOf(a = '', b, c) {
   if (a === 'item' && b && !c && store.getItem(b)?.type === 'workout') return { room: 'gym', full: true, focus: 'whiteboard', detail: b };
+  if (a === 'item' && b && !c && store.getItem(b)?.type === 'task') return { room: 'office', full: true, focus: 'monitor', detail: `task:${b}` };
   if (a === 'item' && b && !c && store.getItem(b)?.type === 'note') return { room: 'office', full: true, focus: 'board', detail: `note:${b}` };
   if (a === 'item' && b && c === 'go' && store.getItem(b)?.type === 'workout') return { room: 'gym', full: true, focus: 'whiteboard', detail: 'go' };
   if ((a === 'new' && b === 'note') || (a === 'edit' && store.getItem(b)?.type === 'note') || (a === 'draft' && editing.draft?.type === 'note')) return { room: 'office', full: true, focus: 'board', detail: 'edit' };
