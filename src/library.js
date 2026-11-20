@@ -1,0 +1,647 @@
+// The Library tab: a cozy three.js reading room. Every day is a book on the shelves
+// (one bay of shelves per month). Tap a book and it slides off the shelf, turns to you
+// and opens, and its pages hold that day's thoughts plus the plan for the next gym visit.
+import * as THREE from '../vendor/three.module.min.js';
+import { byType, getItem, saveItem, deleteItem } from './store.js';
+import { escape, icon, toast } from './ui.js';
+import { todayISO } from '../shared/tasks.js';
+
+// ---------- dates ----------
+const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+const WEEKDAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+const pad = n => String(n).padStart(2, '0');
+const iso = (y, m, d) => `${y}-${pad(m + 1)}-${pad(d)}`;
+const parts = date => { const [y, m, d] = date.split('-').map(Number); return { y, m: m - 1, d }; };
+const weekday = date => { const { y, m, d } = parts(date); return new Date(y, m, d).getDay(); };
+const longDate = date => { const { y, m, d } = parts(date); return `${WEEKDAYS[weekday(date)]}, ${MONTHS[m]} ${d}, ${y}`; };
+const shiftDay = (date, n) => { const { y, m, d } = parts(date); const t = new Date(y, m, d + n); return iso(t.getFullYear(), t.getMonth(), t.getDate()); };
+const isDate = v => /^\d{4}-\d{2}-\d{2}$/.test(v || '');
+const MONTHS_BACK = 2; // the current month plus two before it, or further back if older entries exist
+
+const entryId = date => `journal-${date}`;
+const entry = date => getItem(entryId(date));
+const hasWriting = e => Boolean(e && (e.body || e.nextWorkout || e.workoutId));
+
+function months() {
+  const today = todayISO();
+  const t = parts(today);
+  let start = { y: t.y, m: t.m - MONTHS_BACK };
+  for (const e of byType('journal')) {
+    const p = parts(e.date);
+    if (p.y * 12 + p.m < start.y * 12 + start.m) start = { y: p.y, m: p.m };
+  }
+  const out = [];
+  for (let k = start.y * 12 + start.m; k <= t.y * 12 + t.m; k++) {
+    const y = Math.floor(k / 12), m = k % 12;
+    const last = k === t.y * 12 + t.m ? t.d : new Date(y, m + 1, 0).getDate();
+    out.push({ y, m, days: Array.from({ length: last }, (_, i) => iso(y, m, i + 1)) });
+  }
+  return out;
+}
+
+// Small stable random numbers per date, so each book keeps its look.
+function rand(seed) {
+  let h = 2166136261;
+  for (const c of seed) h = Math.imul(h ^ c.charCodeAt(0), 16777619);
+  return () => { h = Math.imul(h ^ (h >>> 15), 2246822507); h = Math.imul(h ^ (h >>> 13), 3266489909); return ((h ^= h >>> 16) >>> 0) / 4294967296; };
+}
+const BOOK_COLORS = ['#7a2e2a', '#2f4f3a', '#24344f', '#8a5a1f', '#5a2f4a', '#4a3424', '#1f4a4a', '#6b3a1f', '#3d4a2a', '#8c3b2e', '#2e3b5c', '#5c4a2e'];
+
+// ---------- layout ----------
+const PER_SHELF = 8, SHELVES = 4;
+const BAY_W = 0.56, SHELF_GAP = 0.34, SHELF_T = 0.022, DEPTH = 0.26, BAY_GAP = 0.05;
+const BAY_STEP = BAY_W + BAY_GAP;
+const shelfY = s => 1.55 - s * SHELF_GAP; // top face of shelf board s (0 = top shelf)
+const FLOOR_Y = shelfY(SHELVES - 1) - 0.32;
+
+// ---------- module state ----------
+let S = null;
+
+export const mounted = () => Boolean(S);
+
+export function mount(root, date) {
+  unmount();
+  root.innerHTML = `
+    <div class="lib-stage" aria-hidden="true"></div>
+    <div class="lib-hud">
+      <p class="lib-hint">Tap a book to open that day</p>
+      <div class="lib-nav">
+        <button class="lib-chip" data-lib="prev-month" aria-label="Earlier month">${icon('back')}</button>
+        <span class="lib-month" aria-live="polite"></span>
+        <button class="lib-chip lib-flip" data-lib="next-month" aria-label="Later month">${icon('back')}</button>
+        <button class="lib-chip lib-today" data-lib="today">Today</button>
+      </div>
+    </div>
+    <div class="lib-dim"></div>
+    <div class="lib-pages" hidden></div>`;
+  S = { root, stage: root.querySelector('.lib-stage'), pages: root.querySelector('.lib-pages'), books: new Map(), bays: [], open: null, busy: false, pendingSave: null, raf: 0, listeners: [] };
+  const on = (target, type, fn, opts) => { target.addEventListener(type, fn, opts); S.listeners.push(() => target.removeEventListener(type, fn, opts)); };
+  S.on = on;
+  on(root, 'click', onHudClick);
+  on(S.pages, 'input', onPageInput);
+  on(S.pages, 'change', onPageInput);
+  document.body.classList.add('in-library');
+  try { buildScene(); }
+  catch (error) { console.warn('Library 3D unavailable', error); S.flat = true; buildFlat(); }
+  if (isDate(date)) route(date); else focusMonth(S.bays.length - 1, true);
+}
+
+export function unmount() {
+  if (!S) return;
+  saveNow();
+  cancelAnimationFrame(S.raf);
+  S.listeners.forEach(off => off());
+  S.ro?.disconnect();
+  if (S.renderer) {
+    S.scene.traverse(o => { o.geometry?.dispose(); (Array.isArray(o.material) ? o.material : [o.material]).forEach(m => { m?.map?.dispose(); m?.dispose(); }); });
+    S.renderer.dispose();
+    S.renderer.forceContextLoss?.();
+  }
+  document.body.classList.remove('in-library', 'lib-reading');
+  S = null;
+}
+
+/** Called by the router for #/library and #/library/<date>. */
+export function route(date) {
+  if (!S) return;
+  if (!isDate(date) || date > todayISO()) { if (S.open) closeBook(); return; }
+  if (S.open?.date === date) return;
+  if (S.open) { saveNow(); closeBook(true).then(() => openBook(date)); }
+  else openBook(date);
+}
+
+/** The library changed (a save here, or a sync from another device). */
+export function refresh() {
+  if (!S) return;
+  if (!S.flat) for (const [date, b] of S.books) {
+    const written = hasWriting(entry(date));
+    if (written !== b.written) { b.written = written; paintSpine(b); }
+  } else buildFlat();
+  const o = S.open;
+  if (o && !S.pendingSave) {
+    const e = entry(o.date);
+    for (const name of ['body', 'nextWorkout']) {
+      const field = S.pages.querySelector(`[name="${name}"]`);
+      if (field && document.activeElement !== field && field.value !== (e?.[name] || '')) field.value = e?.[name] || '';
+    }
+  }
+}
+
+// ---------- textures ----------
+function canvasTex(w, h, draw) {
+  const c = document.createElement('canvas');
+  c.width = w; c.height = h;
+  draw(c.getContext('2d'), w, h);
+  const t = new THREE.CanvasTexture(c);
+  t.colorSpace = THREE.SRGBColorSpace;
+  t.anisotropy = 4;
+  return t;
+}
+
+function woodTex(base, dark, w = 512, h = 128, rings = 26) {
+  return canvasTex(w, h, (g, W, H) => {
+    g.fillStyle = base; g.fillRect(0, 0, W, H);
+    const r = rand(base + dark);
+    for (let i = 0; i < rings; i++) {
+      g.strokeStyle = dark; g.globalAlpha = 0.08 + r() * 0.18; g.lineWidth = 1 + r() * 3;
+      const y0 = r() * H, amp = 2 + r() * 6, f = 0.004 + r() * 0.01;
+      g.beginPath();
+      for (let x = 0; x <= W; x += 8) g.lineTo(x, y0 + Math.sin(x * f + i) * amp);
+      g.stroke();
+    }
+    g.globalAlpha = 1;
+  });
+}
+
+function shade(hex, k) {
+  const n = parseInt(hex.slice(1), 16);
+  const f = v => Math.max(0, Math.min(255, Math.round(v * k)));
+  return `rgb(${f(n >> 16)}, ${f((n >> 8) & 255)}, ${f(n & 255)})`;
+}
+
+function paintSpine(b) {
+  const { ctx: g, canvas } = b.spineCanvas;
+  const W = canvas.width, H = canvas.height;
+  const grad = g.createLinearGradient(0, 0, W, 0);
+  grad.addColorStop(0, shade(b.color, 0.6)); grad.addColorStop(0.3, shade(b.color, 1.15)); grad.addColorStop(0.7, b.color); grad.addColorStop(1, shade(b.color, 0.55));
+  g.fillStyle = grad; g.fillRect(0, 0, W, H);
+  const gold = b.written ? '#e9c46a' : 'rgba(233, 196, 106, .42)';
+  g.fillStyle = gold;
+  for (const y of [H * 0.07, H * 0.11, H * 0.89, H * 0.93]) g.fillRect(0, y, W, H * 0.012);
+  const { d, m } = parts(b.date);
+  g.textAlign = 'center'; g.textBaseline = 'middle';
+  g.font = `600 ${Math.round(W * 0.62)}px Georgia, 'Times New Roman', serif`;
+  g.fillText(String(d), W / 2, H * 0.36);
+  g.font = `600 ${Math.round(W * 0.26)}px Georgia, serif`;
+  g.fillText(MONTHS[m].slice(0, 3).toUpperCase(), W / 2, H * 0.5);
+  g.fillText(WEEKDAYS[weekday(b.date)].slice(0, 3), W / 2, H * 0.6);
+  if (b.written) { g.beginPath(); g.arc(W / 2, H * 0.75, W * 0.13, 0, Math.PI * 2); g.fill(); }
+  b.spineTex.needsUpdate = true;
+}
+
+// ---------- scene ----------
+function buildScene() {
+  const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'low-power' });
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+  renderer.outputColorSpace = THREE.SRGBColorSpace;
+  renderer.toneMapping = THREE.ACESFilmicToneMapping;
+  renderer.toneMappingExposure = 1.15;
+  renderer.shadowMap.enabled = true;
+  renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+  S.stage.append(renderer.domElement);
+  const scene = new THREE.Scene();
+  scene.background = new THREE.Color('#1b120c');
+  scene.fog = new THREE.Fog('#1b120c', 2.2, 5.5);
+  const camera = new THREE.PerspectiveCamera(45, 1, 0.02, 20);
+  Object.assign(S, { renderer, scene, camera, clock: new THREE.Clock(), camX: 0, camTarget: 0, vel: 0 });
+
+  // Light: a warm lamp that travels with you, a flickering hearth glow, and soft fill.
+  scene.add(new THREE.HemisphereLight('#ffd9a8', '#2a1a10', 0.55));
+  const lamp = new THREE.SpotLight('#ffcf8a', 7, 4, Math.PI / 4.2, 0.65, 1.4);
+  lamp.position.set(0, 2.2, 1.3);
+  lamp.castShadow = true;
+  lamp.shadow.mapSize.set(1024, 1024);
+  lamp.shadow.bias = -0.0015;
+  scene.add(lamp, lamp.target);
+  const hearth = new THREE.PointLight('#ff8a3d', 1.6, 3.2, 1.6);
+  hearth.position.set(-0.7, FLOOR_Y + 0.25, 1.1);
+  scene.add(hearth);
+  Object.assign(S, { lamp, hearth });
+
+  const list = months();
+  const span = list.length * BAY_STEP;
+  const x0 = -(span - BAY_STEP) / 2;
+  S.bayX = i => x0 + i * BAY_STEP;
+
+  // Room: paneled wall, floorboards, rug.
+  const wallTex = woodTex('#3a2416', '#1d1009', 256, 256, 40);
+  wallTex.wrapS = wallTex.wrapT = THREE.RepeatWrapping; wallTex.repeat.set(span * 2 + 6, 3);
+  const wall = new THREE.Mesh(new THREE.PlaneGeometry(span + 12, 4), new THREE.MeshStandardMaterial({ map: wallTex, roughness: 0.9 }));
+  wall.position.set(0, 1, -DEPTH / 2 - 0.03);
+  wall.receiveShadow = true;
+  const floorTex = woodTex('#5a3a22', '#2c1a0d', 512, 128, 30);
+  floorTex.wrapS = floorTex.wrapT = THREE.RepeatWrapping; floorTex.repeat.set(4, span * 2 + 8);
+  floorTex.rotation = Math.PI / 2;
+  const floor = new THREE.Mesh(new THREE.PlaneGeometry(span + 12, 6), new THREE.MeshStandardMaterial({ map: floorTex, roughness: 0.8 }));
+  floor.rotation.x = -Math.PI / 2; floor.position.set(0, FLOOR_Y, 2);
+  floor.receiveShadow = true;
+  const rugTex = canvasTex(256, 128, (g, W, H) => {
+    g.fillStyle = '#6e2a22'; g.fillRect(0, 0, W, H);
+    g.strokeStyle = '#d8a657'; g.lineWidth = 5; g.strokeRect(10, 10, W - 20, H - 20);
+    g.strokeStyle = '#2f3f2a'; g.lineWidth = 3; g.strokeRect(22, 22, W - 44, H - 44);
+    g.fillStyle = '#d8a657';
+    for (let i = 0; i < 6; i++) { g.beginPath(); g.arc(48 + i * 32, H / 2, 7, 0, Math.PI * 2); g.fill(); }
+  });
+  const rug = new THREE.Mesh(new THREE.PlaneGeometry(span + 1, 1.4), new THREE.MeshStandardMaterial({ map: rugTex, roughness: 1 }));
+  rug.rotation.x = -Math.PI / 2; rug.position.set(0, FLOOR_Y + 0.002, 0.95);
+  rug.receiveShadow = true;
+  scene.add(wall, floor, rug);
+
+  // Bookcase: one bay per month, with a brass plaque on top.
+  const caseTex = woodTex('#6b4226', '#2e1a0c');
+  const caseMat = new THREE.MeshStandardMaterial({ map: caseTex, roughness: 0.65, color: '#c79a6e' });
+  const backMat = new THREE.MeshStandardMaterial({ color: '#2a1810', roughness: 1 });
+  const totalH = shelfY(0) + 0.44 - FLOOR_Y;
+  const add = (geo, mat, x, y, z, shadows = true) => { const m = new THREE.Mesh(geo, mat); m.position.set(x, y, z); m.castShadow = shadows; m.receiveShadow = true; scene.add(m); return m; };
+  const pageMat = new THREE.MeshStandardMaterial({ color: '#efe3c4', roughness: 0.95 });
+  list.forEach((month, i) => {
+    const cx = S.bayX(i);
+    add(new THREE.BoxGeometry(BAY_W, totalH, 0.01), backMat, cx, FLOOR_Y + totalH / 2, -DEPTH / 2, false);
+    for (let s = 0; s < SHELVES; s++) add(new THREE.BoxGeometry(BAY_W, SHELF_T, DEPTH), caseMat, cx, shelfY(s) - SHELF_T / 2, 0);
+    add(new THREE.BoxGeometry(BAY_W + BAY_GAP, 0.08, DEPTH + 0.04), caseMat, cx, FLOOR_Y + 0.04, 0.01); // plinth
+    add(new THREE.BoxGeometry(BAY_W + BAY_GAP, 0.05, DEPTH + 0.06), caseMat, cx, FLOOR_Y + totalH, 0.02); // crown
+    const plaque = canvasTex(256, 64, (g, W, H) => {
+      const grad = g.createLinearGradient(0, 0, 0, H); grad.addColorStop(0, '#e6c27a'); grad.addColorStop(1, '#9c7334');
+      g.fillStyle = grad; g.fillRect(0, 0, W, H);
+      g.strokeStyle = '#6b4a1f'; g.lineWidth = 4; g.strokeRect(4, 4, W - 8, H - 8);
+      g.fillStyle = '#3a2610'; g.font = '600 30px Georgia, serif'; g.textAlign = 'center'; g.textBaseline = 'middle';
+      g.fillText(`${MONTHS[month.m]} ${month.y}`, W / 2, H / 2 + 2);
+    });
+    add(new THREE.BoxGeometry(0.3, 0.075, 0.008), [caseMat, caseMat, caseMat, caseMat, new THREE.MeshStandardMaterial({ map: plaque, metalness: 0.6, roughness: 0.35 }), caseMat], cx, shelfY(0) + 0.37, DEPTH / 2 + 0.004, false);
+    S.bays.push({ ...month, x: cx });
+  });
+  for (let i = 0; i <= list.length; i++) add(new THREE.BoxGeometry(BAY_GAP, totalH, DEPTH + 0.02), caseMat, x0 - BAY_STEP / 2 + i * BAY_STEP, FLOOR_Y + totalH / 2, 0);
+
+  // Books.
+  const today = todayISO();
+  S.bays.forEach(month => month.days.forEach(date => {
+    const r = rand(date);
+    const { d } = parts(date);
+    const s = Math.floor((d - 1) / PER_SHELF), slot = (d - 1) % PER_SHELF;
+    const H = 0.2 + r() * 0.07, W = 0.15 + r() * 0.02, T = 0.04 + r() * 0.018;
+    const color = BOOK_COLORS[Math.floor(r() * BOOK_COLORS.length)];
+    const c = document.createElement('canvas'); c.width = 64; c.height = 384;
+    const b = { date, color, H, W, T, written: hasWriting(entry(date)), spineCanvas: { canvas: c, ctx: c.getContext('2d') } };
+    b.spineTex = new THREE.CanvasTexture(c); b.spineTex.colorSpace = THREE.SRGBColorSpace; b.spineTex.anisotropy = 4;
+    paintSpine(b);
+    const coverMat = new THREE.MeshStandardMaterial({ color, roughness: 0.7 });
+    const spineMat = new THREE.MeshStandardMaterial({ map: b.spineTex, roughness: 0.6 });
+    const firstPage = canvasTex(256, 340, (g, Wc, Hc) => {
+      g.fillStyle = '#f3e9cf'; g.fillRect(0, 0, Wc, Hc);
+      g.strokeStyle = 'rgba(90, 120, 160, .35)'; g.lineWidth = 1.5;
+      for (let y = 70; y < Hc - 16; y += 18) { g.beginPath(); g.moveTo(16, y); g.lineTo(Wc - 16, y); g.stroke(); }
+      g.fillStyle = '#4a3020'; g.font = 'italic 22px Georgia, serif'; g.textAlign = 'center';
+      g.fillText(longDate(date).replace(/, \d{4}$/, ''), Wc / 2, 44);
+    });
+    // Body: [+x pages edge, -x spine, +y top, -y bottom, +z first page, -z back cover]
+    const body = new THREE.Mesh(new THREE.BoxGeometry(W, H, T), [pageMat, spineMat, pageMat, pageMat, new THREE.MeshStandardMaterial({ map: firstPage, roughness: 0.95 }), coverMat]);
+    body.castShadow = true; body.receiveShadow = true;
+    const coverTex = canvasTex(256, 340, (g, Wc, Hc) => {
+      g.fillStyle = color; g.fillRect(0, 0, Wc, Hc);
+      g.strokeStyle = '#e9c46a'; g.lineWidth = 4; g.strokeRect(18, 18, Wc - 36, Hc - 36);
+      g.fillStyle = '#e9c46a'; g.textAlign = 'center';
+      g.font = '600 64px Georgia, serif'; g.fillText(String(d), Wc / 2, Hc / 2 - 6);
+      g.font = '600 24px Georgia, serif'; g.fillText(`${MONTHS[parts(date).m]} ${parts(date).y}`.toUpperCase(), Wc / 2, Hc / 2 + 38);
+    });
+    const insideMat = new THREE.MeshStandardMaterial({ color: '#d9c49a', roughness: 0.9 });
+    const cover = new THREE.Mesh(new THREE.BoxGeometry(W + 0.006, H + 0.008, 0.005), [coverMat, coverMat, coverMat, coverMat, new THREE.MeshStandardMaterial({ map: coverTex, roughness: 0.6 }), insideMat]);
+    cover.position.x = W / 2; cover.castShadow = true;
+    const hinge = new THREE.Group();
+    hinge.position.set(-W / 2, 0, T / 2 + 0.0025);
+    hinge.add(cover);
+    const group = new THREE.Group();
+    group.add(body, hinge);
+    if (date === today) {
+      const ribbon = new THREE.Mesh(new THREE.PlaneGeometry(0.012, 0.05), new THREE.MeshStandardMaterial({ color: '#b3262a', side: THREE.DoubleSide }));
+      ribbon.position.set(-W / 2 + 0.05, H / 2 + 0.02, 0); // bookmark peeking out of the top
+      ribbon.rotation.y = Math.PI / 2;
+      group.add(ribbon);
+    }
+    const lean = slot === PER_SHELF - 1 && r() < 0.3 ? 0.06 : 0;
+    const slotW = (BAY_W - 0.04) / PER_SHELF;
+    group.position.set(month.x - BAY_W / 2 + 0.02 + slotW * (slot + 0.5), shelfY(s) + H / 2, (DEPTH / 2) - W / 2 - 0.01 - r() * 0.012);
+    group.rotation.set(0, Math.PI / 2, lean);
+    group.userData.date = date;
+    body.userData.date = date;
+    scene.add(group);
+    Object.assign(b, { group, hinge, home: { pos: group.position.clone(), rot: group.rotation.clone() } });
+    S.books.set(date, b);
+  }));
+
+  // Dust drifting through the lamplight.
+  const N = 160, pos = new Float32Array(N * 3), rd = rand('dust');
+  for (let i = 0; i < N; i++) { pos[i * 3] = (rd() - 0.5) * (span + 2); pos[i * 3 + 1] = FLOOR_Y + rd() * 2; pos[i * 3 + 2] = rd() * 1.4; }
+  const dustGeo = new THREE.BufferGeometry(); dustGeo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+  const dot = canvasTex(32, 32, (g) => { const gr = g.createRadialGradient(16, 16, 0, 16, 16, 16); gr.addColorStop(0, 'rgba(255,230,180,1)'); gr.addColorStop(1, 'rgba(255,230,180,0)'); g.fillStyle = gr; g.fillRect(0, 0, 32, 32); });
+  S.dust = new THREE.Points(dustGeo, new THREE.PointsMaterial({ size: 0.012, map: dot, transparent: true, opacity: 0.55, depthWrite: false, blending: THREE.AdditiveBlending }));
+  scene.add(S.dust);
+
+  S.pickables = [...S.books.values()].map(b => b.group.children[0]);
+  S.minX = S.bayX(0); S.maxX = S.bayX(S.bays.length - 1);
+  S.reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+  resize();
+  S.ro = new ResizeObserver(resize); S.ro.observe(S.stage);
+  bindPointer();
+  S.on(document, 'visibilitychange', () => { if (!document.hidden) loop(); });
+  loop();
+}
+
+function viewDistance() {
+  // Fit about one bay (plus a bit of its neighbours) across a phone, more on wide screens.
+  const { camera } = S;
+  const want = Math.min(BAY_STEP * 1.18 * Math.max(1, camera.aspect / 0.75), BAY_STEP * 3.2);
+  const halfFov = THREE.MathUtils.degToRad(camera.fov / 2);
+  const byWidth = want / 2 / (Math.tan(halfFov) * camera.aspect);
+  const byHeight = (shelfY(0) + 0.5 - FLOOR_Y + 0.5) / 2 / Math.tan(halfFov); // whole case plus room for the controls
+  return Math.max(byWidth, Math.min(byHeight, byWidth * 1.6), 0.9);
+}
+
+function resize() {
+  if (!S?.renderer) return;
+  const w = S.stage.clientWidth || 1, h = S.stage.clientHeight || 1;
+  S.renderer.setSize(w, h, false);
+  S.camera.aspect = w / h;
+  S.camera.updateProjectionMatrix();
+  S.dist = viewDistance();
+}
+
+// ---------- input ----------
+function bindPointer() {
+  const el = S.renderer.domElement;
+  let down = null;
+  S.on(el, 'pointerdown', e => { if (S.open || S.busy) return; down = { x: e.clientX, y: e.clientY, cam: S.camTarget, t: performance.now(), lastX: e.clientX, lastT: performance.now(), moved: false }; el.setPointerCapture?.(e.pointerId); S.vel = 0; });
+  S.on(el, 'pointermove', e => {
+    if (!down) { hover(e); return; }
+    const dx = e.clientX - down.x;
+    if (Math.abs(dx) > 8 || Math.abs(e.clientY - down.y) > 8) down.moved = true;
+    const perPx = worldPerPixel();
+    S.camTarget = clampX(down.cam - dx * perPx);
+    const now = performance.now();
+    S.vel = -(e.clientX - down.lastX) * perPx / Math.max(1, now - down.lastT) * 16;
+    down.lastX = e.clientX; down.lastT = now;
+  });
+  const up = e => {
+    if (!down) return;
+    const tap = !down.moved;
+    down = null;
+    if (tap) { S.vel = 0; const b = pick(e); if (b) location.hash = `#/library/${b.date}`; }
+    else snapToBay();
+  };
+  S.on(el, 'pointerup', up);
+  S.on(el, 'pointercancel', () => { down = null; });
+  S.on(el, 'wheel', e => { if (S.open) return; e.preventDefault(); S.camTarget = clampX(S.camTarget + (e.deltaX || e.deltaY) * worldPerPixel()); clearTimeout(S.wheelT); S.wheelT = setTimeout(snapToBay, 220); }, { passive: false });
+  S.on(window, 'keydown', e => {
+    if (e.key === 'Escape' && S.open) location.hash = '#/library';
+    if (!S.open && !e.target.closest?.('input, textarea, select')) {
+      if (e.key === 'ArrowLeft') focusMonth(currentBay() - 1);
+      if (e.key === 'ArrowRight') focusMonth(currentBay() + 1);
+    }
+  });
+}
+const worldPerPixel = () => (2 * Math.tan(THREE.MathUtils.degToRad(S.camera.fov / 2)) * S.dist) / (S.stage.clientHeight || 1);
+const clampX = x => Math.max(S.minX - 0.15, Math.min(S.maxX + 0.15, x));
+const currentBay = () => Math.max(0, Math.min(S.bays.length - 1, Math.round((S.camTarget - S.minX) / BAY_STEP)));
+function snapToBay() {
+  if (S.flat) return;
+  const ahead = S.camTarget + S.vel * 6;
+  focusMonth(Math.max(0, Math.min(S.bays.length - 1, Math.round((ahead - S.minX) / BAY_STEP))));
+}
+function focusMonth(i, instant = false) {
+  if (!S) return;
+  i = Math.max(0, Math.min(S.bays.length - 1, i));
+  S.vel = 0;
+  const bay = S.bays[i];
+  if (!bay) return;
+  if (!S.flat) { S.camTarget = bay.x; if (instant) S.camX = bay.x; }
+  else S.root.querySelector(`[data-month="${i}"]`)?.scrollIntoView({ behavior: instant ? 'instant' : 'smooth', block: 'start' });
+  S.root.querySelector('.lib-month').textContent = `${MONTHS[bay.m]} ${bay.y}`;
+  S.root.querySelector('[data-lib="prev-month"]').disabled = i === 0;
+  S.root.querySelector('[data-lib="next-month"]').disabled = i === S.bays.length - 1;
+  S.bayIndex = i;
+}
+
+const pointer = new THREE.Vector2(), ray = new THREE.Raycaster();
+function pick(e) {
+  const r = S.renderer.domElement.getBoundingClientRect();
+  pointer.set(((e.clientX - r.left) / r.width) * 2 - 1, -((e.clientY - r.top) / r.height) * 2 + 1);
+  ray.setFromCamera(pointer, S.camera);
+  const hit = ray.intersectObjects(S.pickables, false)[0];
+  return hit ? S.books.get(hit.object.userData.date) : null;
+}
+function hover(e) {
+  if (S.open || S.busy || e.pointerType !== 'mouse') return;
+  const b = pick(e);
+  if (S.hovered && S.hovered !== b) S.hovered.peek = 0;
+  S.hovered = b;
+  if (b) b.peek = 1;
+  S.renderer.domElement.style.cursor = b ? 'pointer' : 'grab';
+}
+
+function onHudClick(e) {
+  const el = e.target.closest('[data-lib]');
+  if (!el) return;
+  const a = el.dataset.lib;
+  if (a === 'prev-month') focusMonth((S.bayIndex ?? 0) - 1);
+  if (a === 'next-month') focusMonth((S.bayIndex ?? 0) + 1);
+  if (a === 'today') { if (S.flat) location.hash = `#/library/${todayISO()}`; else focusMonth(S.bays.length - 1); }
+  if (a === 'close') location.hash = '#/library';
+  if (a === 'day') { const next = shiftDay(S.open.date, Number(el.dataset.step)); if (next <= todayISO()) location.hash = `#/library/${next}`; }
+  if (a === 'copy-plan') {
+    const f = S.pages.querySelector('[name="nextWorkout"]');
+    f.value = el.dataset.text; onPageInput({ target: f }); el.closest('.lib-carry')?.remove();
+  }
+}
+
+// ---------- animation ----------
+const ease = t => (t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2);
+function tween(ms, step) {
+  if (S.reduced) ms = Math.min(ms, 120);
+  return new Promise(resolve => {
+    const t0 = performance.now();
+    const tick = now => {
+      if (!S) return resolve();
+      const t = Math.min(1, (now - t0) / ms);
+      step(ease(t));
+      t < 1 ? requestAnimationFrame(tick) : resolve();
+    };
+    requestAnimationFrame(tick);
+  });
+}
+
+function readingPose(b) {
+  // In front of the camera, sized so the open spread fills most of the screen.
+  const cam = S.camera;
+  const halfFov = THREE.MathUtils.degToRad(cam.fov / 2);
+  const spreadW = b.W * 2 + 0.03, spreadH = b.H + 0.02;
+  const d = Math.max(spreadW / 0.86 / 2 / (Math.tan(halfFov) * cam.aspect), spreadH / 0.8 / 2 / Math.tan(halfFov));
+  const dir = new THREE.Vector3(); cam.getWorldDirection(dir);
+  const pos = cam.position.clone().addScaledVector(dir, d);
+  pos.x += b.W / 2; // centre the spread, not the closed book
+  return { pos, rot: new THREE.Euler(cam.rotation.x, 0, 0) };
+}
+
+async function openBook(date) {
+  if (!S) return;
+  S.open = { date };
+  document.body.classList.add('lib-reading');
+  if (S.flat) { showPages(date); return; }
+  const b = S.books.get(date);
+  if (!b) { showPages(date); return; }
+  S.busy = true;
+  const bayI = S.bays.findIndex(m => m.days.includes(date));
+  if (bayI !== S.bayIndex || Math.abs(S.camX - S.bays[bayI].x) > 0.01) { focusMonth(bayI); await tween(450, () => {}); }
+  S.open.book = b;
+  b.peek = 0;
+  const from = b.group.position.clone(), fromRot = b.group.rotation.clone();
+  const out = from.clone(); out.z += 0.2;
+  await tween(420, t => { b.group.position.lerpVectors(from, out, t); b.group.rotation.z = fromRot.z * (1 - t); });
+  const pose = readingPose(b);
+  await tween(650, t => {
+    b.group.position.lerpVectors(out, pose.pos, t);
+    b.group.position.y += Math.sin(t * Math.PI) * 0.06;
+    b.group.rotation.set(pose.rot.x * t, Math.PI / 2 * (1 - t), 0);
+  });
+  S.root.querySelector('.lib-dim').classList.add('on');
+  await tween(600, t => { b.hinge.rotation.y = -Math.PI * 0.985 * t; });
+  if (S.open?.date !== date) return;
+  showPages(date);
+  S.busy = false;
+}
+
+async function closeBook(fast = false) {
+  if (!S?.open) return;
+  const { book: b } = S.open;
+  S.open = null;
+  hidePages();
+  document.body.classList.remove('lib-reading');
+  S.root.querySelector('.lib-dim').classList.remove('on');
+  if (!b || S.flat) return;
+  S.busy = true;
+  const k = fast ? 0.5 : 1;
+  const startHinge = b.hinge.rotation.y;
+  await tween(450 * k, t => { b.hinge.rotation.y = startHinge * (1 - t); });
+  const from = b.group.position.clone(), fromRot = b.group.rotation.clone();
+  const out = b.home.pos.clone(); out.z += 0.2;
+  await tween(600 * k, t => {
+    b.group.position.lerpVectors(from, out, t);
+    b.group.rotation.set(fromRot.x * (1 - t), fromRot.y + (Math.PI / 2 - fromRot.y) * t, 0);
+  });
+  await tween(380 * k, t => { b.group.position.lerpVectors(out, b.home.pos, t); b.group.rotation.z = b.home.rot.z * t; });
+  S.busy = false;
+}
+
+function loop() {
+  if (!S?.renderer || document.hidden) return;
+  cancelAnimationFrame(S.raf);
+  S.raf = requestAnimationFrame(loop);
+  const t = S.clock.getElapsedTime();
+  if (!S.open && !S.busy && Math.abs(S.vel) > 0.0001) { S.camTarget = clampX(S.camTarget + S.vel); S.vel *= 0.9; }
+  S.camX += (S.camTarget - S.camX) * (S.reduced ? 1 : 0.14);
+  const cam = S.camera;
+  const midY = (shelfY(0) + 0.44 + FLOOR_Y) / 2 - 0.02;
+  if (!S.open || !S.open.book) {
+    cam.position.set(S.camX, midY + 0.12, DEPTH / 2 + S.dist);
+    cam.lookAt(S.camX, midY, 0);
+  }
+  S.lamp.position.x = S.camX + 0.25; S.lamp.target.position.set(S.camX, midY - 0.1, 0);
+  S.hearth.position.x = S.camX - 0.8;
+  S.hearth.intensity = 1.4 + Math.sin(t * 7.3) * 0.18 + Math.sin(t * 13.1) * 0.1 + Math.sin(t * 2.1) * 0.12;
+  for (const b of S.books.values()) {
+    if (S.open?.book === b) continue;
+    const want = b.home.pos.z + (b.peek ? 0.035 : 0);
+    if (Math.abs(b.group.position.z - want) > 0.0005 && !S.busy) b.group.position.z += (want - b.group.position.z) * 0.2;
+  }
+  const p = S.dust.geometry.attributes.position;
+  for (let i = 0; i < p.count; i++) {
+    let y = p.getY(i) + 0.0006;
+    if (y > FLOOR_Y + 2) y = FLOOR_Y;
+    p.setY(i, y);
+    p.setX(i, p.getX(i) + Math.sin(t * 0.5 + i) * 0.0003);
+  }
+  p.needsUpdate = true;
+  S.renderer.render(S.scene, cam);
+}
+
+// ---------- the pages (HTML over the open book, so typing feels native) ----------
+function lastPlan(before) {
+  return byType('journal').filter(e => e.date < before && e.nextWorkout).sort((a, b) => (a.date < b.date ? 1 : -1))[0] || null;
+}
+
+function showPages(date) {
+  const e = entry(date) || {};
+  const workouts = byType('workout').sort((a, b) => a.title.localeCompare(b.title));
+  const linked = e.workoutId ? getItem(e.workoutId) : null;
+  const prev = !e.nextWorkout ? lastPlan(date) : null;
+  const today = todayISO();
+  const isToday = date === today;
+  S.pages.innerHTML = `
+    <div class="lib-book" role="dialog" aria-modal="true" aria-label="${escape(longDate(date))}">
+      <div class="lib-page lib-left">
+        <header class="lib-head">
+          <button class="lib-chip" data-lib="day" data-step="-1" aria-label="Day before">${icon('back')}</button>
+          <div><p class="lib-kicker">${isToday ? 'Today' : date === shiftDay(today, -1) ? 'Yesterday' : WEEKDAYS[weekday(date)]}</p><h2>${escape(longDate(date).replace(/^\w+, /, ''))}</h2></div>
+          <button class="lib-chip lib-flip" data-lib="day" data-step="1" aria-label="Day after" ${date >= today ? 'disabled' : ''}>${icon('back')}</button>
+        </header>
+        <label class="lib-label" for="lib-body">Thoughts</label>
+        <textarea id="lib-body" name="body" class="lib-lines" placeholder="What’s on your mind today?">${escape(e.body || '')}</textarea>
+      </div>
+      <div class="lib-page lib-right">
+        <label class="lib-label" for="lib-next">${icon('dumbbell')}Next time at the gym</label>
+        ${prev ? `<div class="lib-carry"><p>Planned on ${escape(longDate(prev.date).replace(/, \d{4}$/, ''))}:</p><blockquote>${escape(prev.nextWorkout.slice(0, 240))}</blockquote><button class="lib-chip" data-lib="copy-plan" data-text="${escape(prev.nextWorkout)}">Copy here</button></div>` : ''}
+        <textarea id="lib-next" name="nextWorkout" class="lib-lines lib-short" placeholder="e.g. Pull day: deadlift 3×5 at 225, rows, curls">${escape(e.nextWorkout || '')}</textarea>
+        <label class="lib-label" for="lib-workout">Saved workout</label>
+        <div class="lib-row">
+          <select id="lib-workout" name="workoutId">
+            <option value="">None</option>
+            ${workouts.map(w => `<option value="${escape(w.id)}" ${w.id === e.workoutId ? 'selected' : ''}>${escape(w.title)}</option>`).join('')}
+          </select>
+          <a class="lib-chip lib-go" href="${linked ? `#/item/${encodeURIComponent(linked.id)}` : '#/workouts'}" data-lib-link>${linked ? 'Open' : 'Browse'}</a>
+        </div>
+        <p class="lib-saved" aria-live="polite">${e.updatedAt ? 'Saved' : 'Writes save on their own'}</p>
+        <button class="btn btn-soft lib-close" data-lib="close">${icon('close')}Back on the shelf</button>
+      </div>
+    </div>`;
+  S.pages.hidden = false;
+  requestAnimationFrame(() => S?.pages.classList.add('on'));
+  if (matchMedia('(hover: hover)').matches) S.pages.querySelector('#lib-body')?.focus({ preventScroll: true });
+}
+
+function hidePages() {
+  saveNow();
+  S.pages.classList.remove('on');
+  S.pages.hidden = true;
+  S.pages.innerHTML = '';
+}
+
+function onPageInput(e) {
+  if (!S?.open || !e.target.name) return;
+  if (e.target.name === 'workoutId') {
+    const link = S.pages.querySelector('[data-lib-link]');
+    link.href = e.target.value ? `#/item/${encodeURIComponent(e.target.value)}` : '#/workouts';
+    link.textContent = e.target.value ? 'Open' : 'Browse';
+  }
+  S.pendingSave = { date: S.open.date, body: S.pages.querySelector('[name="body"]').value, nextWorkout: S.pages.querySelector('[name="nextWorkout"]').value, workoutId: S.pages.querySelector('[name="workoutId"]').value };
+  const note = S.pages.querySelector('.lib-saved'); if (note) note.textContent = 'Writing…';
+  clearTimeout(S.saveT);
+  S.saveT = setTimeout(saveNow, e.type === 'change' ? 0 : 700);
+}
+
+async function saveNow() {
+  if (!S?.pendingSave) return;
+  clearTimeout(S.saveT);
+  const { date, body, nextWorkout, workoutId } = S.pendingSave;
+  S.pendingSave = null;
+  const existing = entry(date);
+  try {
+    if (!body.trim() && !nextWorkout.trim() && !workoutId) { if (existing) await deleteItem(existing.id); }
+    else await saveItem({ id: entryId(date), type: 'journal', title: longDate(date), date, body, nextWorkout, workoutId });
+    const note = S?.pages.querySelector('.lib-saved'); if (note) note.textContent = 'Saved';
+  } catch (error) { toast(error.message || 'Couldn’t save that page'); }
+}
+
+// ---------- no WebGL: a simple shelf of buttons ----------
+function buildFlat() {
+  if (!S.bays.length) S.bays = months().map(m => ({ ...m }));
+  S.stage.innerHTML = `<div class="lib-flat">${S.bays.map((m, i) => `<section data-month="${i}"><h2>${MONTHS[m.m]} ${m.y}</h2><div class="lib-flat-row">${m.days.map(date => { const r = rand(date); return `<a class="lib-flat-book ${hasWriting(entry(date)) ? 'written' : ''}" style="--c:${BOOK_COLORS[Math.floor((r(), r(), r(), r()) * BOOK_COLORS.length)]}" href="#/library/${date}" aria-label="${escape(longDate(date))}">${parts(date).d}</a>`; }).join('')}</div></section>`).join('')}</div>`;
+  S.stage.removeAttribute('aria-hidden');
+}
+
+// Test hook: where a given day's book sits on screen.
+if (typeof window !== 'undefined' && /^(127\.0\.0\.1|localhost)$/.test(location.hostname)) {
+  window.__bookPoint = (date = todayISO()) => {
+    const b = S?.books.get(date); if (!b) return null;
+    const v = b.group.position.clone().project(S.camera), r = S.renderer.domElement.getBoundingClientRect();
+    return { x: r.left + (v.x + 1) / 2 * r.width, y: r.top + (1 - v.y) / 2 * r.height };
+  };
+}

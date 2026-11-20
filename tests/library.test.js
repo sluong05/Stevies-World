@@ -65,3 +65,13 @@ test('the library API needs the passcode', async () => {
   const got = await call(libraryHandler, { headers: { 'x-passcode': 'open sesame' } });
   assert.equal(got.body.items[0].title, 'Push day');
 });
+
+test('journal days keep thoughts, the next workout and a linked workout', async () => {
+  const { normalizeItem } = await import('../shared/schema.js');
+  const item = normalizeItem({ id: 'journal-2026-11-20', type: 'journal', title: 'Friday', date: '2026-11-20', body: 'Good day.\n\nSlept well.', nextWorkout: 'Legs: squat 5x5', workoutId: 'workout-abc' });
+  assert.equal(item.date, '2026-11-20');
+  assert.equal(item.body, 'Good day.\n\nSlept well.');
+  assert.equal(item.nextWorkout, 'Legs: squat 5x5');
+  assert.equal(item.workoutId, 'workout-abc');
+  assert.throws(() => normalizeItem({ id: 'journal-x1', type: 'journal', title: 'x', date: 'nope' }));
+});
