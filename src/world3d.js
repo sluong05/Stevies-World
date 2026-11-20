@@ -304,7 +304,7 @@ function livingRoom(night) {
   const doors = [
     { label: 'Kitchen', sub: 'Recipes', href: '#/recipes', side: 'left', along: -0.6, opts: { arch: true, peek: night ? 0xc89a5a : 0xf6dca8 } },
     { label: 'Library', sub: 'Journal', href: '#/library', side: 'left', along: 2.6, opts: { double: true, color: 0x6b3f2a } },
-    { label: 'Gym', sub: 'Workouts', href: '#/workouts', side: 'right', along: 0.4, opts: { color: 0x3a6a8a, glass: true } },
+    { label: 'Gym', sub: 'Workouts', href: '#/gym', side: 'right', along: 0.4, opts: { color: 0x3a6a8a, glass: true } },
     { label: 'Office', sub: 'To-do & Notes', href: '#/office', side: 'right', along: 3.0, opts: { color: 0x7b8f4a } },
   ];
   doors.forEach(d => {
@@ -471,8 +471,9 @@ function gym(night) {
   const hand = box(0.02, 0.22, 0.01, 0x222222, 0, 0.1, 0.01, cg); const hand2 = box(0.02, 0.16, 0.01, 0xc4513f, 0, 0.07, 0.02, cg);
   cg.position.y = 2.9; onWall(cg, 'left', 0, W, D); cg.position.x += 0.02; scene.add(cg);
   const back = door({ color: 0x3a6a8a, glass: true }); onWall(back, 'front', 0, W, D); scene.add(back);
-  spots.push({ label: 'Living room', href: '#/', pos: back.localToWorld(new THREE.Vector3(0, 2.52, 0.1)), target: back.localToWorld(new THREE.Vector3(0, 1.2, 0.6)), mesh: back, back: true });
   scene.updateMatrixWorld(true);
+  spots.push({ label: 'Workouts', sub: 'Whiteboard', href: '#/workouts', pos: wb.localToWorld(new THREE.Vector3(0, 1.12, 0.05)), target: wb.localToWorld(new THREE.Vector3(0, 0, 1.2)), mesh: wb, here: true });
+  spots.push({ label: 'Living room', href: '#/', pos: back.localToWorld(new THREE.Vector3(0, 2.52, 0.1)), target: back.localToWorld(new THREE.Vector3(0, 1.2, 0.6)), mesh: back, back: true });
   const panels = { whiteboard: wbPanel };
   let blink = 0, tick = 0, lastLeft = -1;
   return {
@@ -742,7 +743,7 @@ function drawGym(p, night) {
     p.hits.push({ x, y, w, h: 58, fn });
     return x + w;
   };
-  btn(24, 22, 206, '← Living room', green, () => { location.hash = '#/'; }, false);
+  btn(24, 22, 150, '← Gym', green, () => { location.hash = '#/gym'; }, false);
   btn(W - 144, 22, 120, '+ Add', green, () => { location.hash = '#/add?type=workout'; });
   const all = byType('workout');
   const items = gymItems();

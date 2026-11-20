@@ -61,7 +61,7 @@ function render({ keepScroll = false } = {}) {
   }
   if (!a) { html = homeView(); tab = 'home'; }
   else if (a === 'recipes') { html = listView('recipe'); tab = 'recipes'; }
-  else if (a === 'workouts') { html = listView('workout'); tab = 'workouts'; }
+  else if (a === 'workouts' || a === 'gym') { html = listView('workout'); tab = 'workouts'; }
   else if (a === 'notes') { html = listView('note'); tab = 'notes'; }
   else if (a === 'todo') { html = todoView(); tab = 'todo'; }
   else if (a === 'office') { html = officeView(); tab = 'office'; }
@@ -116,9 +116,9 @@ function render({ keepScroll = false } = {}) {
 }
 
 // The house (see world3d.js): each section is a room, loaded after the page has painted.
-const ROOM_OF = { '': 'living', recipes: 'kitchen', workouts: 'gym', office: 'office', todo: 'office', notes: 'office' };
+const ROOM_OF = { '': 'living', recipes: 'kitchen', workouts: 'gym', gym: 'gym', office: 'office', todo: 'office', notes: 'office' };
 const FOCUS_OF = { todo: 'monitor', notes: 'board', workouts: 'whiteboard' };
-const FULL = new Set(['', 'office', 'todo', 'notes', 'workouts', 'add', 'settings']);
+const FULL = new Set(['', 'office', 'gym', 'todo', 'notes', 'workouts', 'add', 'settings']);
 Object.assign(ROOM_OF, { add: 'living', settings: 'living' });
 Object.assign(FOCUS_OF, { add: 'notepad', settings: 'panel' });
 // Which room (and what to zoom onto) a route lives in.
