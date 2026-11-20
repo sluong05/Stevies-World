@@ -7,7 +7,7 @@
 import * as THREE from '../vendor/three.module.min.js';
 import { byType, getItem, isSaved, search, toggleSaved, syncState } from './store.js';
 import { toggleTask, toggleStar, toggleStep, quickAdd } from './todo.js';
-import { groupTasks, dueLabel, todayISO } from '../shared/tasks.js';
+import { groupTasks, dueLabel, todayISO, parseQuickTask } from '../shared/tasks.js';
 import { toast } from './ui.js';
 import { editing } from './editor.js';
 import { mode, startTimer, stopTimer, addTime, parseSeconds, markDone, lastDone, agoLabel } from './modes.js';
@@ -536,6 +536,7 @@ const FONT = '"Zen Maru Gothic", "Atkinson Hyperlegible", system-ui, sans-serif'
 const HEAD = '"Kiwi Maru", Georgia, serif';
 
 // The desk monitor: the To-do app on a tall screen.
+const todoState = { filter: 'All' };
 function drawTodo(p, night) {
   const { g, canvas } = p, W = canvas.width, H = canvas.height;
   const ink = night ? '#eef0dc' : '#2c3a2b', soft = night ? '#aab3c4' : '#6b7866', accent = night ? '#f3c55c' : '#3f6e3c';
@@ -544,13 +545,18 @@ function drawTodo(p, night) {
   g.fillStyle = bg; g.fillRect(0, 0, W, H);
   p.hits = [];
   const today = todayISO();
-  const all = byType('task');
+  const every = byType('task');
+  const lists = [...new Set(every.map(t => t.list).filter(Boolean))].sort();
+  if (!['All', 'Important', ...lists].includes(todoState.filter)) todoState.filter = 'All';
+  const f = todoState.filter;
+  const all = every.filter(t => f === 'All' || (f === 'Important' ? t.important : t.list === f));
   const groups = groupTasks(all, today);
   const open = all.length - groups.done.length;
   // header
   g.fillStyle = accent; rr(g, 24, 24, 150, 56, 28); g.fill();
   g.fillStyle = night ? '#1a2238' : '#fffdf3'; g.font = `600 28px ${FONT}`; g.textBaseline = 'middle'; g.fillText('← Office', 44, 53);
   p.hits.push({ x: 24, y: 24, w: 150, h: 56, fn: () => { location.hash = '#/office'; } });
+  pill(p, W - 190, 24, 166, 56, '+ Details', { stroke: accent, text: accent, font: 25, fn: () => { location.hash = '#/new/task'; } });
   g.fillStyle = ink; g.font = `500 64px ${HEAD}`; g.textBaseline = 'alphabetic'; g.fillText('To-do', 28, 160);
   g.fillStyle = soft; g.font = `400 28px ${FONT}`;
   g.fillText(!all.length ? 'Nothing yet' : open ? `${open} left${groups.overdue.length + groups.today.length ? `, ${groups.overdue.length + groups.today.length} due today` : ''}` : 'All done', 32, 202);
@@ -568,8 +574,30 @@ function drawTodo(p, night) {
   g.fillStyle = night ? '#1a2238' : '#fffdf3'; g.font = `600 28px ${FONT}`; g.textAlign = 'center'; g.fillText('Add', W - 88, 269); g.textAlign = 'left';
   p.hits.push({ x: 24, y: 230, w: W - 180, h: 76, fn: () => focusDesk(), keep: true });
   p.hits.push({ x: W - 150, y: 230, w: 126, h: 76, fn: () => submitDesk() });
+  let listTop = 318;
+  // live preview of what the quick-add understood (day, list, star, repeat)
+  if (val.trim()) {
+    const q = parseQuickTask(val, today);
+    const bits = [q.due && `📅 ${dueLabel(q.due, today)}`, q.repeat && '↻ repeats', q.list && `#${q.list}`, q.important && '★ important'].filter(Boolean);
+    g.fillStyle = bits.length ? accent : soft; g.font = `500 23px ${FONT}`; g.textBaseline = 'middle';
+    g.fillText(ellipsis(g, bits.length ? bits.join('   ') : 'Tip: add “friday”, “#home” or “!”', W - 64), 34, 330);
+    listTop += 30;
+  }
+  // filter chips: All, Important, then each list
+  if (every.length) {
+    let cx = 24;
+    for (const c of ['All', 'Important', ...lists]) {
+      const label = c === 'Important' ? '★ Important' : c;
+      g.font = `600 22px ${FONT}`; const w = g.measureText(label).width + 30;
+      if (cx + w > W - 24) break;
+      const on = c === f;
+      pill(p, cx, listTop, w, 44, label, { fill: on ? accent : null, stroke: on ? null : (night ? '#46517a' : '#d6cfb8'), text: on ? (night ? '#1a2238' : '#fffdf3') : soft, font: 22, fn: () => { todoState.filter = c; p.scroll = 0; } });
+      cx += w + 8;
+    }
+    listTop += 58;
+  }
   // list
-  const top = 330, bottom = H - 16;
+  const top = listTop, bottom = H - 16;
   g.save(); g.beginPath(); g.rect(0, top, W, bottom - top); g.clip();
   let y = top + 10 - p.scroll;
   const ROWH = 92;
@@ -600,7 +628,9 @@ function drawTodo(p, night) {
   const LABELS = [['overdue', 'Overdue'], ['today', 'Today'], ['upcoming', 'Next 7 days'], ['later', 'Later'], ['someday', 'No date']];
   for (const [k, label] of LABELS) if (groups[k].length) { section(label); groups[k].forEach(row); }
   if (groups.done.length) { section('Done'); groups.done.slice(0, 20).forEach(row); }
-  if (!all.length) { g.fillStyle = soft; g.font = `400 28px ${FONT}`; wrap(g, 'Tap the box above and type. Try “call dentist friday #health !” to set a day, a list and a star in one go.', W - 80).forEach((l, i) => g.fillText(l, 40, top + 60 + i * 40)); }
+  if (every.length && !all.length) { g.fillStyle = soft; g.font = `400 28px ${FONT}`; g.textBaseline = 'alphabetic'; g.fillText('Nothing in this list.', 40, top + 60); }
+  else if (every.length && !open) { g.fillStyle = accent; g.font = `500 28px ${FONT}`; g.textBaseline = 'alphabetic'; g.fillText('✓ All done here. Nice!', 40, Math.max(top + 50, y + 40)); y += 70; }
+  if (!every.length) { g.fillStyle = soft; g.font = `400 28px ${FONT}`; wrap(g, 'Tap the box above and type. Try “call dentist friday #health !” to set a day, a list and a star in one go.', W - 80).forEach((l, i) => g.fillText(l, 40, top + 60 + i * 40)); }
   g.restore();
   p.maxScroll = Math.max(0, y + p.scroll - bottom + 20);
   // scroll hint
@@ -641,9 +671,13 @@ function drawBoard(p, night) {
     g.font = `400 29px ${FONT}`; g.fillStyle = '#2c3a2b';
     const lines = wrap(g, plainText(openNote.body), W - 140);
     lines.forEach((l, i) => { const ly = top + 34 + i * 42 - p.scroll; if (ly > top - 40 && ly < bottom + 40) g.fillText(l, 66, ly); });
-    if (openNote.sourceUrl) { const ly = top + 34 + lines.length * 42 + 20 - p.scroll; g.fillStyle = '#3f6e3c'; g.fillText(ellipsis(g, openNote.sourceUrl, W - 140), 66, ly); }
+    if (openNote.sourceUrl) {
+      const ly = top + 34 + lines.length * 42 + 20 - p.scroll; g.fillStyle = '#3f6e3c'; g.fillText(`🔗 ${ellipsis(g, openNote.sourceUrl, W - 180)}`, 66, ly);
+      if (ly > top && ly < bottom) p.hits.push({ x: 50, y: ly - 32, w: W - 100, h: 46, fn: () => window.open(openNote.sourceUrl, '_blank', 'noopener') });
+    }
     g.restore();
     p.maxScroll = Math.max(0, lines.length * 42 + 120 - (bottom - top));
+    if (p.maxScroll > 0) { const frac = (bottom - top) / (bottom - top + p.maxScroll), bh = (bottom - top) * frac; g.fillStyle = 'rgba(0,0,0,.15)'; rr(g, W - 56, top + (bottom - top - bh) * (p.scroll / p.maxScroll), 6, bh, 3); g.fill(); }
   } else {
     // header strip
     paper(W / 2 - 170, 26, 340, 90, '#fff3c8', 0.01); pin(W / 2, 40);
@@ -1190,18 +1224,21 @@ function drawTask(p, t, night) {
   const today = todayISO();
   pill(p, 24, 24, 150, 56, '← To-do', { fill: accent, text: on, fn: () => { location.hash = '#/todo'; } });
   pill(p, W - 140, 24, 116, 56, 'Edit', { stroke: accent, text: accent, fn: () => { location.hash = `#/edit/${encodeURIComponent(t.id)}`; } });
+  const top = 96, bottom = H - 8;
+  g.save(); g.beginPath(); g.rect(0, top, W, bottom - top); g.clip();
+  const off = p.scroll, hit = h => { if (h.y + h.h > top && h.y < bottom) p.hits.push(h); };
   // big checkbox + title
-  g.lineWidth = 4; g.strokeStyle = t.done ? accent : soft; rr(g, 28, 120, 56, 56, 16); g.stroke();
-  if (t.done) { g.fillStyle = accent; rr(g, 28, 120, 56, 56, 16); g.fill(); g.strokeStyle = on; g.lineWidth = 6; g.beginPath(); g.moveTo(40, 148); g.lineTo(52, 161); g.lineTo(73, 135); g.stroke(); }
-  p.hits.push({ x: 20, y: 112, w: 72, h: 72, fn: () => toggleTask(t.id).then(m => m && toast(m)) });
+  g.lineWidth = 4; g.strokeStyle = t.done ? accent : soft; rr(g, 28, 120 - off, 56, 56, 16); g.stroke();
+  if (t.done) { g.fillStyle = accent; rr(g, 28, 120 - off, 56, 56, 16); g.fill(); g.strokeStyle = on; g.lineWidth = 6; g.beginPath(); g.moveTo(40, 148 - off); g.lineTo(52, 161 - off); g.lineTo(73, 135 - off); g.stroke(); }
+  hit({ x: 20, y: 112 - off, w: 72, h: 72, fn: () => toggleTask(t.id).then(m => m && toast(m)) });
   g.fillStyle = ink; g.font = `500 44px ${HEAD}`; g.textBaseline = 'alphabetic';
-  let y = 164;
+  let y = 164 - off;
   wrap(g, t.title, W - 130, 3).forEach(l => { g.fillText(l, 104, y); y += 52; });
   if (t.done) { g.fillStyle = soft; g.font = `400 24px ${FONT}`; g.fillText('Done', 104, y); y += 34; }
   y += 6;
   // star + facts
   const star = t.important;
-  pill(p, 28, y, 220, 54, star ? '★ Important' : '☆ Mark important', { fill: star ? '#f2a43a' : null, stroke: '#f2a43a', text: star ? '#fff' : '#c88a1a', font: 23, fn: () => toggleStar(t.id) });
+  if (y + 54 > top) pill(p, 28, y, 220, 54, star ? '★ Important' : '☆ Mark important', { fill: star ? '#f2a43a' : null, stroke: '#f2a43a', text: star ? '#fff' : '#c88a1a', font: 23, fn: () => toggleStar(t.id) });
   y += 80;
   const facts = [
     t.due ? ['When', dueLabel(t.due, today), !t.done && t.due < today] : null,
@@ -1216,22 +1253,23 @@ function drawTask(p, t, night) {
   if (t.steps?.length) {
     y += 10; g.fillStyle = soft; g.font = `600 21px ${FONT}`; g.fillText(`STEPS  ${t.steps.filter(s => s.done).length}/${t.steps.length}`, 30, y); y += 20;
     t.steps.forEach((st, i) => {
-      if (y > H - 120) return;
       g.lineWidth = 3; g.strokeStyle = st.done ? accent : soft; rr(g, 30, y + 10, 36, 36, 10); g.stroke();
       if (st.done) { g.fillStyle = accent; rr(g, 30, y + 10, 36, 36, 10); g.fill(); }
       g.fillStyle = st.done ? soft : ink; g.font = `400 26px ${FONT}`; const tx = ellipsis(g, st.text, W - 120); g.fillText(tx, 82, y + 38);
       if (st.done) g.fillRect(82, y + 30, g.measureText(tx).width, 2.5);
-      p.hits.push({ x: 20, y: y + 2, w: W - 40, h: 52, fn: () => toggleStep(t.id, i) });
+      hit({ x: 20, y: y + 2, w: W - 40, h: 52, fn: () => toggleStep(t.id, i) });
       y += 56;
     });
   }
   if (t.note) {
     y += 16; g.fillStyle = soft; g.font = `600 21px ${FONT}`; g.fillText('NOTES', 30, y); y += 38;
     g.fillStyle = ink; g.font = `400 25px ${FONT}`;
-    wrap(g, plainText(t.note), W - 60).forEach(l => { if (y < H - 30) { g.fillText(l, 30, y); y += 34; } });
+    wrap(g, plainText(t.note), W - 60).forEach(l => { g.fillText(l, 30, y); y += 34; });
   }
-  if (t.sourceUrl && y < H - 40) { y += 10; g.fillStyle = accent; g.font = `400 24px ${FONT}`; g.fillText(ellipsis(g, t.sourceUrl, W - 60), 30, y); p.hits.push({ x: 24, y: y - 30, w: W - 48, h: 44, fn: () => window.open(t.sourceUrl, '_blank', 'noopener') }); }
-  p.maxScroll = 0;
+  if (t.sourceUrl) { y += 10; g.fillStyle = accent; g.font = `400 24px ${FONT}`; g.fillText(ellipsis(g, t.sourceUrl, W - 60), 30, y); hit({ x: 24, y: y - 30, w: W - 48, h: 44, fn: () => window.open(t.sourceUrl, '_blank', 'noopener') }); }
+  g.restore();
+  p.maxScroll = Math.max(0, y + off + 40 - bottom);
+  if (p.maxScroll > 0) { const frac = (bottom - top) / (bottom - top + p.maxScroll), bh = (bottom - top) * frac; g.fillStyle = night ? 'rgba(255,255,255,.18)' : 'rgba(0,0,0,.15)'; rr(g, W - 10, top + (bottom - top - bh) * (off / p.maxScroll), 6, bh, 3); g.fill(); }
   p.tex.needsUpdate = true;
 }
 
@@ -1272,6 +1310,17 @@ function office(night) {
   const boardPanel = makePanel(1.2, 1.7, 768, 1088);
   board.add(boardPanel.mesh); boardPanel.mesh.position.z = 0.02;
   board.position.y = 1.65; onWall(board, 'back', 2.0, W, D); scene.add(board);
+  // wall clock between the desk and the corkboard, with real hands
+  const clock = new THREE.Group();
+  cyl(0.24, 0.24, 0.05, 0x7a4e33, 0, 0, 0, clock, 28).rotation.x = Math.PI / 2;
+  cyl(0.21, 0.21, 0.02, 0xfffaf0, 0, 0, 0.03, clock, 28).rotation.x = Math.PI / 2;
+  for (let i = 0; i < 12; i++) { const a = i / 12 * Math.PI * 2; box(i % 3 ? 0.012 : 0.02, i % 3 ? 0.03 : 0.05, 0.01, 0x2c3a2b, Math.sin(a) * 0.17, Math.cos(a) * 0.17, 0.045, clock).rotation.z = -a; }
+  const hand = (len, wid, color, z) => { const h = new THREE.Group(); box(wid, len, 0.008, color, 0, len / 2 - 0.02, 0, h); h.position.z = z; clock.add(h); return h; };
+  const hourHand = hand(0.1, 0.022, 0x2c3a2b, 0.05), minHand = hand(0.155, 0.014, 0x2c3a2b, 0.056), secHand = hand(0.17, 0.006, 0xc4513f, 0.062);
+  cyl(0.015, 0.015, 0.03, 0xc4513f, 0, 0, 0.06, clock, 10).rotation.x = Math.PI / 2;
+  clock.position.y = 2.35; onWall(clock, 'back', 0.65, W, D); scene.add(clock);
+  const setClock = () => { const d = new Date(), s = d.getSeconds(), m = d.getMinutes() + s / 60, h = d.getHours() % 12 + m / 60; secHand.rotation.z = -s / 60 * Math.PI * 2; minHand.rotation.z = -m / 60 * Math.PI * 2; hourHand.rotation.z = -h / 12 * Math.PI * 2; };
+  setClock();
   // bookshelf, plant, window
   const shelf = new THREE.Group();
   box(1.0, 2.1, 0.32, 0x7a4e33, 0, 1.05, 0.16, shelf);
@@ -1296,6 +1345,7 @@ function office(night) {
     refresh() { todoPanel.dirty = true; boardPanel.dirty = true; },
     update(dt, t) {
       steam(t);
+      setClock();
       const b = Math.floor(t * 2);
       if (b !== blink && document.activeElement === deskInput) { blink = b; todoPanel.dirty = true; }
       if (b !== blink && typingIn()) { blink = b; boardPanel.dirty = true; todoPanel.dirty = true; }
