@@ -77,10 +77,11 @@ function render({ keepScroll = false } = {}) {
 
   const focused = ['search', 'quick-task'].includes(document.activeElement?.id) ? document.activeElement : null;
   const caret = focused?.selectionStart;
-  const room = ROOM_OF[a || ''] || null;
+  const view = viewOf(a, b, c);
+  const room = view.room;
   const theme = document.documentElement.dataset.theme;
   if (room && theme !== 'plain') {
-    html = FULL.has(a || '')
+    html = view.full
       ? `<section class="room-stage room-stage-full" aria-label="${ROOM_LABEL[room]}"></section><div class="room-fallback">${html}</div>`
       : `<div class="room-stage room-stage-short" aria-hidden="true"></div><div class="room-sheet">${html}</div>`;
   }
@@ -116,21 +117,33 @@ function render({ keepScroll = false } = {}) {
 
 // The house (see world3d.js): each section is a room, loaded after the page has painted.
 const ROOM_OF = { '': 'living', recipes: 'kitchen', workouts: 'gym', office: 'office', todo: 'office', notes: 'office' };
-const FOCUS_OF = { todo: 'monitor', notes: 'board' };
-const FULL = new Set(['', 'office', 'todo', 'notes']);
+const FOCUS_OF = { todo: 'monitor', notes: 'board', workouts: 'whiteboard' };
+const FULL = new Set(['', 'office', 'todo', 'notes', 'workouts', 'add', 'settings']);
+Object.assign(ROOM_OF, { add: 'living', settings: 'living' });
+Object.assign(FOCUS_OF, { add: 'notepad', settings: 'panel' });
+// Which room (and what to zoom onto) a route lives in.
+function viewOf(a = '', b, c) {
+  if (a === 'item' && b && !c && store.getItem(b)?.type === 'workout') return { room: 'gym', full: true, focus: 'whiteboard', detail: b };
+  if (a === 'item' && b && !c && store.getItem(b)?.type === 'task') return { room: 'office', full: true, focus: 'monitor', detail: `task:${b}` };
+  if (a === 'item' && b && !c && store.getItem(b)?.type === 'note') return { room: 'office', full: true, focus: 'board', detail: `note:${b}` };
+  if (a === 'item' && b && c === 'go' && store.getItem(b)?.type === 'workout') return { room: 'gym', full: true, focus: 'whiteboard', detail: 'go' };
+  if ((a === 'new' && b === 'note') || (a === 'edit' && store.getItem(b)?.type === 'note') || (a === 'draft' && editing.draft?.type === 'note')) return { room: 'office', full: true, focus: 'board', detail: 'edit' };
+  return { room: ROOM_OF[a] || null, full: FULL.has(a), focus: FOCUS_OF[a] || null, detail: null };
+}
 const ROOM_LABEL = { living: 'Living room', kitchen: 'Kitchen', gym: 'Gym', office: 'Office' };
 let worldMod = null;
 function setRoom(room) {
   const theme = document.documentElement.dataset.theme;
   document.body.dataset.room = room && theme !== 'plain' ? room : '';
-  const part = parseRoute().parts[0] || '';
-  document.body.dataset.screen = room && theme !== 'plain' && FULL.has(part) ? 'full' : '';
-  const focus = FOCUS_OF[part] || null;
+  const [pa, pb, pc] = parseRoute().parts;
+  const view = viewOf(pa, pb, pc);
+  document.body.dataset.screen = room && theme !== 'plain' && view.full ? 'full' : '';
+  const focus = view.focus;
   const label = $('#room-name');
   if (label) label.textContent = room && room !== 'living' ? ROOM_LABEL[room] : '';
-  if (worldMod) { worldMod.show(room, theme, focus); return; }
+  if (worldMod) { worldMod.show(room, theme, focus, view.detail); return; }
   if (!room || theme === 'plain') return;
-  const go = () => import('./world3d.js').then(m => { worldMod = m; const p = parseRoute().parts[0] || ''; m.show(ROOM_OF[p] || null, document.documentElement.dataset.theme, FOCUS_OF[p] || null); }).catch(() => document.body.classList.add('world-failed'));
+  const go = () => import('./world3d.js').then(m => { worldMod = m; const v = viewOf(...parseRoute().parts); m.show(v.room, document.documentElement.dataset.theme, v.focus, v.detail); }).catch(() => document.body.classList.add('world-failed'));
   (window.requestIdleCallback || (f => setTimeout(f, 120)))(go, { timeout: 600 });
 }
 

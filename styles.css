@@ -821,3 +821,4 @@ body.lib-reading .kit-top { opacity: 0; pointer-events: none; }
 @media (max-width: 480px) {
   .kit-add span, .kit-wide { display: none; }
 }
+.room-fallback .mode { position: static; }
