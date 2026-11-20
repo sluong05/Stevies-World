@@ -113,7 +113,28 @@ function onWall(obj, side, along, w, d) {
   return obj;
 }
 
-function door({ color = 0x8a5a3a, frame = 0xf3ead8, sign = 0xf6e7c4, arch = false, double = false, glass = false, peek = null }) {
+// A wooden plaque with the room's name painted on it, so doors are labelled in 3D.
+function plaque(label, sub, w = 0.9, h = 0.34, { bg = '#f6e7c4', ink = '#4a3220', soft = '#8a6a4a', edge = '#c89a5a' } = {}) {
+  const c = document.createElement('canvas'); c.width = 512; c.height = Math.round(512 * h / w);
+  const g = c.getContext('2d'), W = c.width, H = c.height;
+  const paint = () => {
+    g.fillStyle = edge; g.fillRect(0, 0, W, H);
+    g.fillStyle = bg; g.fillRect(8, 8, W - 16, H - 16);
+    g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillStyle = ink;
+    g.font = `600 ${Math.round(H * (sub ? 0.42 : 0.55))}px "Kiwi Maru", Georgia, serif`;
+    g.fillText(label, W / 2, sub ? H * 0.4 : H / 2);
+    if (sub) { g.fillStyle = soft; g.font = `${Math.round(H * 0.26)}px "Zen Maru Gothic", system-ui, sans-serif`; g.fillText(sub, W / 2, H * 0.77); }
+  };
+  paint();
+  const tex = new THREE.CanvasTexture(c); tex.colorSpace = THREE.SRGBColorSpace; tex.anisotropy = 4;
+  const wood = mat(0x7a4e33);
+  const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, 0.03), [wood, wood, wood, wood, new THREE.MeshBasicMaterial({ map: tex }), wood]);
+  // repaint once the web fonts load, so a fallback font from the first frame doesn't stick
+  document.fonts?.ready.then(() => { paint(); tex.needsUpdate = true; });
+  return m;
+}
+
+function door({ color = 0x8a5a3a, frame = 0xf3ead8, sign = 0xf6e7c4, arch = false, double = false, glass = false, peek = null, label = '', sub = '' }) {
   const g = new THREE.Group();
   const W = double ? 1.7 : 1.05, H = 2.2;
   box(0.1, H + 0.1, 0.12, frame, -W / 2 - 0.05, H / 2, 0.04, g);
@@ -139,7 +160,8 @@ function door({ color = 0x8a5a3a, frame = 0xf3ead8, sign = 0xf6e7c4, arch = fals
     const knob = new THREE.Mesh(new THREE.SphereGeometry(0.045, 10, 8), mat(0xd8b45a));
     knob.position.set(W / 2 - 0.15, H * 0.47, 0.1); g.add(knob);
   }
-  box(0.62, 0.2, 0.03, sign, 0, H + 0.32, 0.06, g);
+  if (label) { const pl = plaque(label, sub, 1.25, 0.46); pl.position.set(0, H + 0.4, 0.07); g.add(pl); }
+  else box(0.62, 0.2, 0.03, sign, 0, H + 0.32, 0.06, g);
   return g;
 }
 
@@ -243,7 +265,7 @@ function livingRoom(night) {
   box(1.2, 0.08, 0.7, 0x8a5a3a, 0, 0.42, 0, table);
   [[-0.5, -0.28], [0.5, -0.28], [-0.5, 0.28], [0.5, 0.28]].forEach(([x, z]) => box(0.06, 0.4, 0.06, 0x6b4430, x, 0.2, z, table));
   const mug = cyl(0.07, 0.06, 0.13, 0xf6efe0, 0.48, 0.53, -0.2, table, 12);
-  box(0.32, 0.05, 0.24, 0x3a6a8a, -0.25, 0.48, 0, table); box(0.3, 0.04, 0.22, 0xc4513f, -0.24, 0.52, 0.01, table);
+  box(0.32, 0.05, 0.24, 0x3a6a8a, -0.42, 0.48, 0.18, table).rotation.y = 0.3; box(0.3, 0.04, 0.22, 0xc4513f, -0.41, 0.52, 0.19, table).rotation.y = 0.2;
   table.position.set(0, 0, -1.5); scene.add(table);
   const steam = smoke(scene, new THREE.Vector3(0.48, 0.62, -1.7), 5);
   const lamp = new THREE.Group();
@@ -286,10 +308,10 @@ function livingRoom(night) {
     { label: 'Office', sub: 'To-do & Notes', href: '#/office', side: 'right', along: 3.0, opts: { color: 0x7b8f4a } },
   ];
   doors.forEach(d => {
-    const g = door(d.opts); onWall(g, d.side, d.along, W, D); scene.add(g);
+    const g = door({ ...d.opts, label: d.label, sub: d.sub }); onWall(g, d.side, d.along, W, D); scene.add(g);
     const pos = g.localToWorld(new THREE.Vector3(0, 2.5, 0.1));
     g.updateMatrixWorld(); pos.copy(g.localToWorld(new THREE.Vector3(0, 2.52, 0.1)));
-    spots.push({ ...d, pos, target: g.localToWorld(new THREE.Vector3(0, 1.2, 0.6)), mesh: g });
+    spots.push({ ...d, pos, target: g.localToWorld(new THREE.Vector3(0, 1.2, 0.6)), mesh: g, plaque: true });
   });
 
   // a notepad on the coffee table (Add) and a light switch by the gym door (Settings)
@@ -299,7 +321,8 @@ function livingRoom(night) {
   pad.add(addPanel.mesh); addPanel.mesh.position.set(0, -0.01, 0.001);
   const stand = box(0.06, 0.4, 0.06, 0x6b4430, 0, -0.1, -0.2, pad); stand.rotation.x = 0.7;
   pad.position.set(0.05, 0.78, -1.62); pad.rotation.x = -0.55; scene.add(pad); pad.updateMatrixWorld(true);
-  spots.push({ label: 'Add', sub: 'Notepad', href: '#/add', pos: pad.localToWorld(new THREE.Vector3(0, 0.48, 0)), target: new THREE.Vector3(0.05, 1.2, -0.6), mesh: pad, here: true });
+  const padTag = plaque('+ Add', '', 0.4, 0.14); padTag.position.set(0, 0.45, 0.02); pad.add(padTag); pad.updateMatrixWorld(true);
+  spots.push({ label: 'Add', sub: 'Notepad', href: '#/add', pos: pad.localToWorld(new THREE.Vector3(0, 0.48, 0)), target: new THREE.Vector3(0.05, 1.2, -0.6), mesh: pad, here: true, plaque: true });
   // the house panel on the wall behind you (Settings), switched on by the light switch
   const sp = new THREE.Group();
   box(1.12, 1.62, 0.04, 0x7a4e33, 0, 0, 0, sp);
@@ -309,8 +332,9 @@ function livingRoom(night) {
   const sw = new THREE.Group();
   box(0.16, 0.26, 0.02, 0xf6efe0, 0, 0, 0.01, sw); box(0.05, 0.09, 0.03, night ? 0xd8d2c4 : 0xffffff, 0, night ? -0.03 : 0.03, 0.03, sw);
   const swHit = new THREE.Mesh(new THREE.PlaneGeometry(0.6, 0.7), new THREE.MeshBasicMaterial({ visible: false })); swHit.position.z = 0.04; sw.add(swHit);
+  const swTag = plaque('Settings', '', 0.72, 0.22); swTag.position.set(0, 0.3, 0.01); sw.add(swTag);
   sw.position.y = 1.3; onWall(sw, 'right', -1.0, W, D); scene.add(sw); sw.updateMatrixWorld(true);
-  spots.push({ label: 'Settings', sub: 'Light switch', href: '#/settings', pos: sw.localToWorld(new THREE.Vector3(0, 0.25, 0.05)), target: sw.localToWorld(new THREE.Vector3(0, -0.1, 1.2)), mesh: sw, here: true });
+  spots.push({ label: 'Settings', sub: 'Light switch', href: '#/settings', pos: sw.localToWorld(new THREE.Vector3(0, 0.25, 0.05)), target: sw.localToWorld(new THREE.Vector3(0, -0.1, 1.2)), mesh: sw, here: true, plaque: true });
   scene.updateMatrixWorld(true);
   const lpanels = { notepad: addPanel, panel: setPanel };
 
@@ -1314,7 +1338,7 @@ function ensure() {
     down.lx = e.clientX; down.ly = e.clientY;
     const p = focusName && room.panels?.[focusName];
     if (p) { p.scroll = Math.max(0, Math.min(p.maxScroll, p.scroll - dy * (p.canvas.height / (host.clientHeight * 0.9)))); p.dirty = true; }
-    else yawVel += dx * 2.2;
+    else { yawVel += dx * 2.2; heldAt = performance.now(); }
     wake();
   });
   document.addEventListener('pointerup', e => {
@@ -1389,7 +1413,7 @@ function onScroll() {
   if (stageVisible && !was) wake();
 }
 
-let focusName = null, snap = true;
+let focusName = null, snap = true, autoT = 0, heldAt = -1e9;
 const camPos = new THREE.Vector3(), camLook = new THREE.Vector3();
 const want = new THREE.Vector3(), wantLook = new THREE.Vector3();
 function frame() {
@@ -1414,7 +1438,9 @@ function frame() {
       wantLook.copy(f.center);
     } else {
       yawUser += yawVel * 0.12; yawVel *= 0.9;
-      const auto = reduced ? 0 : Math.sin(t * 0.09) * room.yawRange * 0.85;
+      // the slow look-around holds still for a while after you drag, so it doesn't pull your view away
+      if (performance.now() - heldAt > 6000) autoT += dt;
+      const auto = reduced ? 0 : Math.sin(autoT * 0.12) * room.yawRange * 0.85;
       yawUser = Math.max(-room.yawRange - auto, Math.min(room.yawRange - auto, yawUser));
       const yaw = room.yawCenter + auto + yawUser;
       want.copy(room.eye); want.y += reduced ? 0 : Math.sin(t * 0.7) * 0.015;
@@ -1480,9 +1506,9 @@ export function show(name, theme, focus = null, detail = null) {
     room.scene.background = new THREE.Color(night ? 0x1a1410 : 0xf3e6cc);
     room.scene.updateMatrixWorld(true);
     clock = new THREE.Clock();
-    yawUser = 0; yawVel = 0; flying = null; snap = false;
+    yawUser = 0; yawVel = 0; flying = null; snap = false; autoT = 0; heldAt = -1e9;
     camPos.copy(room.eye); camLook.set(room.eye.x + Math.sin(room.yawCenter), room.eye.y + room.pitch, room.eye.z + Math.cos(room.yawCenter));
-    signs.innerHTML = room.spots.map((s, i) => `<a class="sign ${s.back ? 'sign-back' : ''}" data-spot="${i}" href="${s.href}"><strong>${s.back ? '← ' : ''}${s.label}</strong>${s.sub ? `<small>${s.sub}</small>` : ''}</a>`).join('');
+    signs.innerHTML = room.spots.map((s, i) => `<a class="sign ${s.back ? 'sign-back' : ''} ${s.plaque ? 'sign-3d' : ''}" data-spot="${i}" href="${s.href}"><strong>${s.back ? '← ' : ''}${s.label}</strong>${s.sub ? `<small>${s.sub}</small>` : ''}</a>`).join('');
   }
   if ((focus !== focusName || detail !== detailId) && room.panels) { for (const p of Object.values(room.panels)) { p.scroll = 0; p.open = null; } }
   detailId = detail;
