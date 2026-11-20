@@ -1,7 +1,7 @@
 import { mkdir, rm, cp, readFile, writeFile, readdir } from 'node:fs/promises';
 await rm('dist', { recursive: true, force: true });
 await mkdir('dist', { recursive: true });
-for (const file of ['index.html', 'styles.css', 'manifest.webmanifest', 'src', 'shared', 'data', 'assets']) {
+for (const file of ['index.html', 'styles.css', 'manifest.webmanifest', 'src', 'shared', 'data', 'assets', 'vendor']) {
   await cp(file, `dist/${file}`, { recursive: true });
 }
 // Cache the entire current module graph before activating an update, including
@@ -15,7 +15,7 @@ async function modules(dir) {
   return nested.flat();
 }
 const core = ['/', '/index.html', '/styles.css', '/manifest.webmanifest', '/assets/icon.svg',
-  ...(await Promise.all(['src', 'shared', 'data'].map(modules))).flat().sort()];
+  ...(await Promise.all(['src', 'shared', 'data', 'vendor'].map(modules))).flat().sort()];
 // Stamp the service worker so each deploy refreshes the cached app.
 const sw = await readFile('sw.js', 'utf8');
 await writeFile('dist/sw.js', sw.replace('__VERSION__', Date.now().toString(36)).replace(/const CORE = \[[^\]]*\];/, `const CORE = ${JSON.stringify(core)};`));

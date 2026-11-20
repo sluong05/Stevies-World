@@ -13,6 +13,7 @@ applyTheme();
 const main = $('#main');
 let lastRoute = '';
 let lastListRoute = '#/';
+let libraryMod = null;
 
 function parseRoute() {
   const hash = location.hash.replace(/^#/, '') || '/';
@@ -29,12 +30,24 @@ function render({ keepScroll = false } = {}) {
   let html;
   let tab = '';
   document.body.classList.toggle('in-mode', a === 'item' && (c === 'cook' || c === 'go'));
+  if (a !== 'library' && libraryMod) libraryMod.unmount();
+  if (a === 'library') {
+    const mark = () => $$('[data-tab]').forEach(el => (el.dataset.tab === 'library' ? el.setAttribute('aria-current', 'page') : el.removeAttribute('aria-current')));
+    lastRoute = routeKey; mark();
+    if (main.dataset.view === 'library' && libraryMod?.mounted()) { libraryMod.route(b || ''); return; }
+    main.innerHTML = '<section class="library" id="library"><p class="lib-loading">Lighting the lamps…</p></section>';
+    main.dataset.view = 'library';
+    window.scrollTo({ top: 0, behavior: 'instant' });
+    import('./library.js').then(m => { libraryMod = m; if (parseRoute().parts[0] === 'library') m.mount($('#library'), parseRoute().parts[1] || ''); });
+    return;
+  }
   if (!a) { html = homeView(); tab = 'home'; }
   else if (a === 'recipes') { html = listView('recipe'); tab = 'recipes'; }
   else if (a === 'workouts') { html = listView('workout'); tab = 'workouts'; }
   else if (a === 'notes') { html = listView('note'); tab = 'notes'; }
   else if (a === 'todo') { html = todoView(); tab = 'todo'; }
   else if (a === 'item' && b && (c === 'cook' || c === 'go')) { enterMode(c === 'cook' ? 'cook' : 'workout', b); html = modeView(); }
+  else if (a === 'item' && b && store.getItem(b)?.type === 'journal') { location.replace(`#/library/${store.getItem(b).date}`); return; }
   else if (a === 'item' && b) { html = itemView(b); tab = { recipe: 'recipes', workout: 'workouts', note: 'notes', task: 'todo' }[store.getItem(b)?.type] || ''; }
   else if (a === 'add') { html = addView(params); tab = 'add'; }
   else if (a === 'new' && ['recipe', 'workout', 'note', 'task'].includes(b)) { if (changed || !editing.draft) startNew(b); html = editorView(); }
@@ -60,6 +73,7 @@ store.onChange(() => {
   const { parts } = parseRoute();
   // Don't rebuild a form while someone is typing in it.
   if (['new', 'edit', 'draft', 'add'].includes(parts[0])) return;
+  if (parts[0] === 'library') { libraryMod?.refresh(); return; }
   if (parts[0] === 'settings' && document.activeElement?.name === 'passcode') return;
   const y = window.scrollY;
   render({ keepScroll: true });

@@ -37,6 +37,7 @@ export const scheme = e => (e.sets && e.reps ? `${e.sets} × ${e.reps}` : e.reps
 const FOCUS_CLASS = f => ({ 'Lower body': 'legs', Legs: 'legs', 'Upper body': 'upper', Push: 'upper', Pull: 'upper', Core: 'core', Cardio: 'cardio', Mobility: 'core' }[f] || 'full');
 
 export function card(item, { size = '' } = {}) {
+  if (item.type === 'journal') return `<article class="card card-note ${size}"><a class="card-link" href="#/library/${escape(item.date)}"><span class="note-category">Library</span><h3>${escape(item.title)}</h3>${item.body ? `<p>${escape(item.body.slice(0, 140))}</p>` : ''}</a></article>`;
   if (item.type === 'task') return `<article class="card card-note card-task ${size}"><a class="card-link" href="#/item/${encodeURIComponent(item.id)}"><span class="note-category">${item.done ? 'Done' : 'To-do'}${item.due ? ` · ${escape(dueLabel(item.due))}` : ''}</span><h3>${escape(item.title)}</h3>${item.note ? `<p>${escape(item.note.slice(0, 140))}</p>` : ''}</a></article>`;
   const href = `#/item/${encodeURIComponent(item.id)}`;
   if (item.type === 'recipe') {
@@ -71,7 +72,7 @@ export function homeView() {
   const time = theme === 'night' ? 'night' : theme === 'retro' ? 'day' : timeOfDay();
   const q = ui.query.trim();
   const items = allItems();
-  const favs = items.filter(i => i.type !== 'task' && isSaved(i.id)).sort(newest);
+  const favs = items.filter(i => !['task', 'journal'].includes(i.type) && isSaved(i.id)).sort(newest);
   const recipes = byType('recipe').sort(newest);
   const workouts = byType('workout').sort(newest);
   const notes = byType('note').sort(newest);

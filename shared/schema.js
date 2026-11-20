@@ -1,7 +1,7 @@
 // One item shape for everything in the library: recipes, workouts and notes.
 // Used by the browser (before saving) and the API (before storing) so bad data never lands.
 
-export const TYPES = ['recipe', 'workout', 'note', 'task'];
+export const TYPES = ['recipe', 'workout', 'note', 'task', 'journal'];
 const REPEAT_VALUES = ['', 'daily', 'weekdays', 'weekly', 'biweekly', 'monthly', 'yearly'];
 const isDate = v => typeof v === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(v);
 export const RECIPE_CATEGORIES = ['Breakfast', 'Lunch', 'Dinner', 'Snack', 'Dessert', 'Drinks', 'Other'];
@@ -120,6 +120,12 @@ export function normalizeItem(raw, { now = Date.now() } = {}) {
     item.doneAt = item.done && Number.isFinite(raw.doneAt) ? raw.doneAt : item.done ? item.updatedAt : null;
     item.steps = (Array.isArray(raw.steps) ? raw.steps : []).slice(0, 50)
       .map(s => ({ text: str(typeof s === 'string' ? s : s?.text, 300, 'Step'), done: Boolean(s?.done) })).filter(s => s.text);
+  } else if (type === 'journal') {
+    // One book in the Library per day: that day's thoughts plus the plan for the next gym visit.
+    item.date = isDate(raw.date) ? raw.date : fail('A journal day needs a date.');
+    item.body = str(raw.body, 40000, 'Thoughts', { multiline: true });
+    item.nextWorkout = str(raw.nextWorkout, 4000, 'Next workout', { multiline: true });
+    item.workoutId = /^[a-z0-9][a-z0-9-]{2,79}$/i.test(raw.workoutId || '') ? raw.workoutId : '';
   } else {
     item.category = str(raw.category, 40, 'Category') || 'General';
     item.body = str(raw.body, 40000, 'Note text', { multiline: true });
@@ -134,6 +140,6 @@ export function newId(type = 'item') {
 
 /** Plain text used for search. */
 export function searchText(item) {
-  const parts = [item.title, item.description, item.category, item.focus, item.equipment, item.note, item.body, item.list, item.sourceName, ...(item.type === 'task' ? (item.steps || []).map(s => s.text) : []), ...(item.tags || []), ...(item.ingredients || []), ...(item.blocks || []).flatMap(b => [b.name, ...b.exercises.map(e => e.name)])];
+  const parts = [item.title, item.description, item.category, item.focus, item.equipment, item.note, item.body, item.nextWorkout, item.list, item.sourceName, ...(item.type === 'task' ? (item.steps || []).map(s => s.text) : []), ...(item.tags || []), ...(item.ingredients || []), ...(item.blocks || []).flatMap(b => [b.name, ...b.exercises.map(e => e.name)])];
   return parts.filter(Boolean).join(' ').toLowerCase();
 }
