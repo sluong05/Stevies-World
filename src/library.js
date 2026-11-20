@@ -145,6 +145,7 @@ export function refresh() {
       const field = S.pages.querySelector(`[name="${name}"]`);
       if (field && document.activeElement !== field && field.value !== (e?.[name] || '')) field.value = e?.[name] || '';
     }
+    drawPages();
   }
 }
 
@@ -351,6 +352,7 @@ function buildScene() {
 
   S.pickables = [...S.books.values()].map(b => b.group.children[0]);
   S.month = monthOf;
+  makePages();
   S.minX = S.bayX(0); S.maxX = S.bayX(S.bays.length - 1);
   S.reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
 
@@ -389,7 +391,7 @@ function resize() {
 function bindPointer() {
   const el = S.renderer.domElement;
   let down = null;
-  S.on(el, 'pointerdown', e => { if (S.open || S.busy) return; down = { x: e.clientX, y: e.clientY, cam: S.camTarget, t: performance.now(), lastX: e.clientX, lastT: performance.now(), moved: false }; el.setPointerCapture?.(e.pointerId); S.vel = 0; });
+  S.on(el, 'pointerdown', e => { if (S.open) { if (!S.busy) S.openTap = { x: e.clientX, y: e.clientY }; return; } if (S.busy) return; down = { x: e.clientX, y: e.clientY, cam: S.camTarget, t: performance.now(), lastX: e.clientX, lastT: performance.now(), moved: false }; el.setPointerCapture?.(e.pointerId); S.vel = 0; });
   S.on(el, 'pointermove', e => {
     if (!down) { hover(e); return; }
     const dx = e.clientX - down.x;
@@ -401,6 +403,15 @@ function bindPointer() {
     down.lastX = e.clientX; down.lastT = now;
   });
   const up = e => {
+    if (S.open && S.openTap) {
+      const moved = Math.hypot(e.clientX - S.openTap.x, e.clientY - S.openTap.y) > 10;
+      S.openTap = null;
+      if (moved || S.busy) return;
+      const side = pickPage(e);
+      if (side) focusSide(side);
+      else { document.activeElement?.blur?.(); S.open.side = null; markSide(null); settleBook(); }
+      return;
+    }
     if (!down) return;
     const tap = !down.moved;
     down = null;
@@ -466,10 +477,7 @@ function onHudClick(e) {
   if (a === 'today') location.hash = `#/library/${todayISO()}`;
   if (a === 'close') location.hash = '#/library';
   if (a === 'day' && el.dataset.date) location.hash = `#/library/${el.dataset.date}`;
-  if (a === 'copy-plan') {
-    const f = S.pages.querySelector('[name="nextWorkout"]');
-    f.value = el.dataset.text; onPageInput({ target: f }); el.closest('.lib-carry')?.remove();
-  }
+  if (a === 'side') focusSide(el.dataset.side);
 }
 
 // ---------- animation ----------
@@ -488,23 +496,198 @@ function tween(ms, step) {
   });
 }
 
-function readingPose(b) {
-  // In front of the camera, sized so the open spread fills most of the screen.
+// ---------- writing straight onto the 3D pages ----------
+// Each open page is a curved mesh with a canvas texture. Typing goes into a hidden
+// textarea (so phone keyboards, autocorrect and dictation all work) and is painted onto
+// the page as you type, so the letters bend with the paper.
+const PAGE_W = 768, PAGE_H = 1024;
+const INK = '#2e1e10', FADED = 'rgba(74, 48, 32, .45)', RULE = 'rgba(90, 120, 160, .32)', LABEL = '#8a5a2e';
+const HAND = '"Kiwi Maru", Georgia, serif';
+
+function curvedPage(gutterAtLeft) {
+  // A 1×1 sheet that rises out of the gutter and settles toward the outer edge.
+  const geo = new THREE.PlaneGeometry(1, 1, 40, 1);
+  const p = geo.attributes.position;
+  for (let i = 0; i < p.count; i++) {
+    const u = gutterAtLeft ? p.getX(i) + 0.5 : 0.5 - p.getX(i);
+    p.setZ(i, Math.pow(Math.sin(Math.PI * Math.min(1, u * 0.92 + 0.04)), 0.55) * (1 - u * 0.35));
+  }
+  geo.computeVertexNormals();
+  return geo;
+}
+
+function makePages() {
+  const mk = gutterAtLeft => {
+    const canvas = document.createElement('canvas');
+    canvas.width = PAGE_W; canvas.height = PAGE_H;
+    const tex = new THREE.CanvasTexture(canvas);
+    tex.colorSpace = THREE.SRGBColorSpace;
+    tex.anisotropy = S.renderer.capabilities.getMaxAnisotropy();
+    const mesh = new THREE.Mesh(curvedPage(gutterAtLeft), new THREE.MeshStandardMaterial({ map: tex, emissiveMap: tex, emissive: new THREE.Color('#9a8a70'), roughness: 0.92, side: THREE.DoubleSide }));
+    mesh.visible = false;
+    mesh.receiveShadow = true;
+    return { canvas, ctx: canvas.getContext('2d'), tex, mesh };
+  };
+  S.leftPage = mk(false);
+  S.rightPage = mk(true);
+  S.leftPage.mesh.userData.side = 'body';
+  S.rightPage.mesh.userData.side = 'nextWorkout';
+}
+
+function attachPages(b) {
+  const sx = b.W * 0.965, sy = b.H * 0.955, bulge = 0.009;
+  const R = S.rightPage.mesh, L = S.leftPage.mesh;
+  R.scale.set(sx, sy, bulge); R.position.set(0.002, 0, b.T / 2 + 0.0012); R.rotation.set(0, 0, 0);
+  L.scale.set(sx, sy, bulge); L.position.set(b.W / 2 + 0.002, 0, -0.0034); L.rotation.set(0, Math.PI, 0);
+  b.group.add(R); b.hinge.add(L);
+  R.visible = L.visible = true;
+}
+function detachPages() {
+  for (const p of [S.leftPage, S.rightPage]) { p.mesh.visible = false; p.mesh.parent?.remove(p.mesh); }
+}
+
+// Lay text out in lines that fit the page, remembering where each line starts so the caret can be placed.
+function layout(g, text, maxW) {
+  const lines = [];
+  let index = 0;
+  for (const para of text.split('\n')) {
+    let line = '', lineStart = index;
+    const words = para.split(/(\s+)/);
+    for (const w of words) {
+      if (!w) continue;
+      if (g.measureText(line + w).width <= maxW || !line) {
+        if (!line && g.measureText(w).width > maxW) {
+          for (const ch of w) { if (g.measureText(line + ch).width > maxW && line) { lines.push({ text: line, start: lineStart }); lineStart += line.length; line = ''; } line += ch; }
+        } else line += w;
+      } else { lines.push({ text: line, start: lineStart }); lineStart += line.length; line = /^\s+$/.test(w) ? '' : w; if (!line) lineStart += w.length; }
+    }
+    lines.push({ text: line, start: lineStart });
+    index += para.length + 1;
+  }
+  return lines;
+}
+
+function paper(g, gutterLeft) {
+  const grad = g.createLinearGradient(0, 0, PAGE_W, 0);
+  const a = '#e6d5ae', b = '#f6ecd4';
+  if (gutterLeft) { grad.addColorStop(0, a); grad.addColorStop(0.12, b); grad.addColorStop(1, '#f1e4c6'); }
+  else { grad.addColorStop(0, '#f1e4c6'); grad.addColorStop(0.88, b); grad.addColorStop(1, a); }
+  g.fillStyle = grad; g.fillRect(0, 0, PAGE_W, PAGE_H);
+  // a little paper grain
+  const r = rand('paper' + gutterLeft);
+  g.fillStyle = 'rgba(120, 90, 50, .05)';
+  for (let i = 0; i < 400; i++) g.fillRect(r() * PAGE_W, r() * PAGE_H, 2, 2);
+}
+
+// Draws text on ruled lines between y0 and y1 and returns where the caret is.
+function writeBlock(g, { text, placeholder, x, y0, y1, w, focused, caretAt }) {
+  const LH = 52;
+  g.font = `32px ${HAND}`;
+  g.strokeStyle = RULE; g.lineWidth = 2;
+  for (let y = y0 + LH; y <= y1; y += LH) { g.beginPath(); g.moveTo(x, y + 8); g.lineTo(x + w, y + 8); g.stroke(); }
+  if (!text && placeholder) {
+    g.fillStyle = FADED; g.font = `italic 30px ${HAND}`;
+    layout(g, placeholder, w).slice(0, 3).forEach((l, i) => g.fillText(l.text, x + 4, y0 + LH * (i + 1)));
+    g.font = `32px ${HAND}`;
+  }
+  const lines = layout(g, text || '', w);
+  const fit = Math.max(1, Math.floor((y1 - y0) / LH));
+  let caretLine = lines.length - 1;
+  if (caretAt !== undefined) for (let i = 0; i < lines.length; i++) if (lines[i].start <= caretAt) caretLine = i;
+  const first = Math.max(0, Math.min(lines.length - fit, caretLine - fit + 1));
+  g.fillStyle = INK;
+  lines.slice(first, first + fit).forEach((l, i) => g.fillText(l.text, x + 4, y0 + LH * (i + 1)));
+  if (first > 0) { g.fillStyle = FADED; g.font = `italic 22px ${HAND}`; g.fillText('…', x + w - 20, y0 + 16); }
+  if (focused && S.caretOn) {
+    const l = lines[caretLine] || { text: '', start: 0 };
+    g.font = `32px ${HAND}`;
+    const cx = x + 4 + g.measureText(l.text.slice(0, Math.max(0, (caretAt ?? 0) - l.start))).width;
+    const cy = y0 + LH * (caretLine - first + 1);
+    g.fillStyle = '#7a3b1e'; g.fillRect(cx + 1, cy - 30, 3, 38);
+  }
+}
+
+function drawPages() {
+  if (!S?.open || !S.leftPage) return;
+  const date = S.open.date;
+  const body = S.pages.querySelector('[name="body"]'), next = S.pages.querySelector('[name="nextWorkout"]'), sel = S.pages.querySelector('[name="workoutId"]');
+  if (!body) return;
+  const focus = document.activeElement;
+  const today = todayISO();
+  // Left page: the day and its thoughts.
+  {
+    const g = S.leftPage.ctx;
+    paper(g, false);
+    g.textAlign = 'center';
+    g.fillStyle = LABEL; g.font = 'italic 30px Georgia, serif';
+    g.fillText(date === today ? 'Today' : date === shiftDay(today, -1) ? 'Yesterday' : WEEKDAYS[weekday(date)], PAGE_W / 2, 84);
+    g.fillStyle = INK; g.font = '600 46px Georgia, serif';
+    g.fillText(longDate(date).replace(/^\w+, /, ''), PAGE_W / 2, 140);
+    g.strokeStyle = '#c9a46a'; g.lineWidth = 2; g.beginPath(); g.moveTo(PAGE_W / 2 - 90, 168); g.lineTo(PAGE_W / 2 + 90, 168); g.stroke();
+    g.textAlign = 'left';
+    g.fillStyle = LABEL; g.font = '600 24px system-ui, sans-serif'; g.fillText('THOUGHTS', 70, 222);
+    writeBlock(g, { text: body.value, placeholder: 'Tap here and write what’s on your mind…', x: 66, y0: 236, y1: PAGE_H - 70, w: PAGE_W - 136, focused: focus === body, caretAt: body.selectionStart });
+    S.leftPage.tex.needsUpdate = true;
+  }
+  // Right page: the plan for the next gym visit, and the saved workout it points to.
+  {
+    const g = S.rightPage.ctx;
+    paper(g, true);
+    g.textAlign = 'left';
+    g.fillStyle = LABEL; g.font = '600 24px system-ui, sans-serif'; g.fillText('NEXT TIME AT THE GYM', 70, 96);
+    const prev = !next.value ? lastPlan(date) : null;
+    writeBlock(g, { text: next.value, placeholder: prev ? `Last plan (${longDate(prev.date).replace(/^\w+, /, '').replace(/, \d{4}$/, '')}): ${prev.nextWorkout.slice(0, 120)}` : 'Tap here and plan your next workout…', x: 66, y0: 110, y1: 690, w: PAGE_W - 136, focused: focus === next, caretAt: next.selectionStart });
+    g.fillStyle = LABEL; g.font = '600 24px system-ui, sans-serif'; g.fillText('SAVED WORKOUT', 70, 770);
+    const w = sel.value ? getItem(sel.value) : null;
+    g.fillStyle = w ? INK : FADED; g.font = `${w ? '' : 'italic '}32px ${HAND}`;
+    g.fillText(w ? w.title.slice(0, 34) : 'None picked (choose one below)', 74, 820);
+    g.strokeStyle = RULE; g.beginPath(); g.moveTo(66, 836); g.lineTo(PAGE_W - 70, 836); g.stroke();
+    g.fillStyle = FADED; g.font = 'italic 24px Georgia, serif';
+    g.fillText(S.saveNote || 'Your writing saves on its own', 70, PAGE_H - 72);
+    S.rightPage.tex.needsUpdate = true;
+  }
+}
+
+function lastPlan(before) {
+  return byType('journal').filter(e => e.date < before && e.nextWorkout).sort((a, b) => (a.date < b.date ? 1 : -1))[0] || null;
+}
+
+// ---------- reading pose: whole spread on wide screens, one page at a time on phones ----------
+const narrow = () => S.camera.aspect < 0.9;
+function readingPose(b, side = S.open?.side) {
   const cam = S.camera;
-  const halfFov = THREE.MathUtils.degToRad(cam.fov / 2);
-  const spreadW = b.W * 2 + 0.03, spreadH = b.H + 0.02;
-  const d = Math.max(spreadW / 0.86 / 2 / (Math.tan(halfFov) * cam.aspect), spreadH / 0.8 / 2 / Math.tan(halfFov));
+  const tanH = Math.tan(THREE.MathUtils.degToRad(cam.fov / 2));
+  const vv = window.visualViewport;
+  const stageH = S.stage.clientHeight || 1;
+  const visible = vv ? Math.min(1, Math.max(0.35, (vv.height - (S.stage.getBoundingClientRect().top - (vv.offsetTop || 0)) - 8) / stageH)) : 1;
+  const toolsFrac = 64 / stageH; // keep the page clear of the little toolbar
+  const spread = !narrow() || !side;
+  const wantW = spread ? b.W * 2 + 0.03 : b.W * 1.04;
+  const usableH = Math.max(0.3, visible - (visible < 0.98 ? 0 : toolsFrac));
+  const d = Math.max(wantW / 0.94 / 2 / (tanH * cam.aspect), (b.H + 0.02) / (0.92 * usableH) / 2 / tanH);
   const dir = new THREE.Vector3(); cam.getWorldDirection(dir);
   const pos = cam.position.clone().addScaledVector(dir, d);
-  pos.x += b.W / 2; // centre the spread, not the closed book
+  pos.x += spread ? b.W / 2 : side === 'body' ? b.W : 0;
+  const frustumH = 2 * d * tanH;
+  pos.y += frustumH * (1 - usableH) / 2; // lift the page into the part of the screen you can see
   return { pos, rot: new THREE.Euler(cam.rotation.x, 0, 0) };
+}
+
+function settleBook() {
+  const b = S?.open?.book;
+  if (!b || S.busy) return;
+  const from = b.group.position.clone(), to = readingPose(b).pos;
+  if (from.distanceTo(to) < 0.0005) return;
+  S.settleId = (S.settleId || 0) + 1;
+  const id = S.settleId;
+  tween(380, t => { if (S.settleId === id && S.open?.book === b) b.group.position.lerpVectors(from, to, t); });
 }
 
 async function openBook(date) {
   if (!S) return;
-  S.open = { date };
+  S.open = { date, side: null };
   document.body.classList.add('lib-reading');
-  if (S.flat) { showPages(date); return; }
+  if (S.flat) { showFlatPages(date); return; }
   let b = S.books.get(date);
   if (!b && date === todayISO()) {
     const bay = S.bays[S.bays.length - 1];
@@ -512,33 +695,37 @@ async function openBook(date) {
     b.temp = true;
     S.pickables.push(b.group.children[0]);
   }
-  if (!b) { showPages(date); return; }
+  if (!b) { showFlatPages(date); return; }
   S.busy = true;
   const bayI = Math.max(0, monthOf(date));
   if (bayI !== S.bayIndex || Math.abs(S.camX - S.bays[bayI].x) > 0.01) { focusMonth(bayI); await tween(450, () => {}); }
   S.open.book = b;
   b.peek = 0;
+  showInk(date);
+  attachPages(b);
+  drawPages();
   const from = b.group.position.clone(), fromRot = b.group.rotation.clone();
   const out = from.clone(); out.z += 0.2;
   await tween(420, t => { b.group.position.lerpVectors(from, out, t); b.group.rotation.z = fromRot.z * (1 - t); });
-  const pose = readingPose(b);
+  const pose = readingPose(b, null);
   await tween(650, t => {
     b.group.position.lerpVectors(out, pose.pos, t);
     b.group.position.y += Math.sin(t * Math.PI) * 0.06;
     b.group.rotation.set(pose.rot.x * t, Math.PI / 2 * (1 - t), 0);
   });
   S.root.querySelector('.lib-dim').classList.add('on');
-  await tween(600, t => { b.hinge.rotation.y = -Math.PI * 0.985 * t; });
+  await tween(650, t => { b.hinge.rotation.y = -Math.PI * 0.985 * t; });
   if (S.open?.date !== date) return;
-  showPages(date);
   S.busy = false;
+  S.pages.classList.add('on');
+  if (matchMedia('(hover: hover)').matches && !narrow()) focusSide('body');
 }
 
 async function closeBook(fast = false) {
   if (!S?.open) return;
   const { book: b } = S.open;
   S.open = null;
-  hidePages();
+  hideInk();
   document.body.classList.remove('lib-reading');
   S.root.querySelector('.lib-dim').classList.remove('on');
   if (!b || S.flat) { if (shelvesChanged()) rebuild(); return; }
@@ -546,6 +733,7 @@ async function closeBook(fast = false) {
   const k = fast ? 0.5 : 1;
   const startHinge = b.hinge.rotation.y;
   await tween(450 * k, t => { b.hinge.rotation.y = startHinge * (1 - t); });
+  if (S) detachPages();
   const from = b.group.position.clone(), fromRot = b.group.rotation.clone();
   const out = b.home.pos.clone(); out.z += 0.2;
   await tween(600 * k, t => {
@@ -553,8 +741,8 @@ async function closeBook(fast = false) {
     b.group.rotation.set(fromRot.x * (1 - t), fromRot.y + (Math.PI / 2 - fromRot.y) * t, 0);
   });
   await tween(380 * k, t => { b.group.position.lerpVectors(out, b.home.pos, t); b.group.rotation.z = b.home.rot.z * t; });
-  S.busy = false;
   if (!S) return;
+  S.busy = false;
   if (b.temp && !hasWriting(entry(b.date))) {
     await tween(300, t => { b.group.scale.setScalar(1 - t * 0.999); });
     S.scene.remove(b.group);
@@ -596,57 +784,83 @@ function loop() {
   S.renderer.render(S.scene, cam);
 }
 
-// ---------- the pages (HTML over the open book, so typing feels native) ----------
-function lastPlan(before) {
-  return byType('journal').filter(e => e.date < before && e.nextWorkout).sort((a, b) => (a.date < b.date ? 1 : -1))[0] || null;
+// ---------- the hidden inputs and the little toolbar under the book ----------
+function navStops(date) {
+  const today = todayISO();
+  const stops = [...new Set([...writtenDates(), today])].sort();
+  return { before: stops.filter(d => d < date).pop() || '', after: stops.find(d => d > date) || '' };
 }
 
-function showPages(date) {
+function showInk(date) {
   const e = entry(date) || {};
   const workouts = byType('workout').sort((a, b) => a.title.localeCompare(b.title));
-  const linked = e.workoutId ? getItem(e.workoutId) : null;
-  const prev = !e.nextWorkout ? lastPlan(date) : null;
-  const today = todayISO();
-  const isToday = date === today;
-  const stops = [...new Set([...writtenDates(), today])].sort();
-  const before = stops.filter(d => d < date).pop() || '', after = stops.find(d => d > date) || '';
+  const { before, after } = navStops(date);
+  S.saveNote = '';
+  S.pages.className = 'lib-pages lib-ink';
   S.pages.innerHTML = `
-    <div class="lib-book" role="dialog" aria-modal="true" aria-label="${escape(longDate(date))}">
-      <div class="lib-page lib-left">
-        <header class="lib-head">
-          <button class="lib-chip" data-lib="day" data-date="${before}" aria-label="Earlier entry" ${before ? '' : 'disabled'}>${icon('back')}</button>
-          <div><p class="lib-kicker">${isToday ? 'Today' : date === shiftDay(today, -1) ? 'Yesterday' : WEEKDAYS[weekday(date)]}</p><h2>${escape(longDate(date).replace(/^\w+, /, ''))}</h2></div>
-          <button class="lib-chip lib-flip" data-lib="day" data-date="${after}" aria-label="Later entry" ${after ? '' : 'disabled'}>${icon('back')}</button>
-        </header>
-        <label class="lib-label" for="lib-body">Thoughts</label>
-        <textarea id="lib-body" name="body" class="lib-lines" placeholder="What’s on your mind today?">${escape(e.body || '')}</textarea>
-      </div>
-      <div class="lib-page lib-right">
-        <label class="lib-label" for="lib-next">${icon('dumbbell')}Next time at the gym</label>
-        ${prev ? `<div class="lib-carry"><p>Planned on ${escape(longDate(prev.date).replace(/, \d{4}$/, ''))}:</p><blockquote>${escape(prev.nextWorkout.slice(0, 240))}</blockquote><button class="lib-chip" data-lib="copy-plan" data-text="${escape(prev.nextWorkout)}">Copy here</button></div>` : ''}
-        <textarea id="lib-next" name="nextWorkout" class="lib-lines lib-short" placeholder="e.g. Pull day: deadlift 3×5 at 225, rows, curls">${escape(e.nextWorkout || '')}</textarea>
-        <label class="lib-label" for="lib-workout">Saved workout</label>
-        <div class="lib-row">
-          <select id="lib-workout" name="workoutId">
-            <option value="">None</option>
-            ${workouts.map(w => `<option value="${escape(w.id)}" ${w.id === e.workoutId ? 'selected' : ''}>${escape(w.title)}</option>`).join('')}
-          </select>
-          <a class="lib-chip lib-go" href="${linked ? `#/item/${encodeURIComponent(linked.id)}` : '#/workouts'}" data-lib-link>${linked ? 'Open' : 'Browse'}</a>
-        </div>
-        <p class="lib-saved" aria-live="polite">${e.updatedAt ? 'Saved' : 'Writes save on their own'}</p>
-        <button class="btn btn-soft lib-close" data-lib="close">${icon('close')}Back on the shelf</button>
-      </div>
+    <textarea class="lib-hidden-input" name="body" aria-label="Thoughts for ${escape(longDate(date))}" autocapitalize="sentences">${escape(e.body || '')}</textarea>
+    <textarea class="lib-hidden-input" name="nextWorkout" aria-label="Next time at the gym" autocapitalize="sentences">${escape(e.nextWorkout || '')}</textarea>
+    <div class="lib-tools" role="toolbar" aria-label="${escape(longDate(date))}">
+      <button class="lib-chip" data-lib="day" data-date="${before}" aria-label="Earlier entry" ${before ? '' : 'disabled'}>${icon('back')}</button>
+      <button class="lib-chip lib-side" data-lib="side" data-side="body">Thoughts</button>
+      <button class="lib-chip lib-side" data-lib="side" data-side="nextWorkout">${icon('dumbbell')}Gym</button>
+      <label class="lib-chip lib-pick">${icon('list')}<span class="sr-only">Saved workout</span><select name="workoutId">
+        <option value="">Workout</option>
+        ${workouts.map(w => `<option value="${escape(w.id)}" ${w.id === e.workoutId ? 'selected' : ''}>${escape(w.title)}</option>`).join('')}
+      </select></label>
+      <a class="lib-chip lib-go" href="${e.workoutId ? `#/item/${encodeURIComponent(e.workoutId)}` : '#/workouts'}" data-lib-link aria-label="Open saved workout">${icon('next')}</a>
+      <button class="lib-chip lib-shelf" data-lib="close">${icon('close')}<span>Shelf</span></button>
+      <button class="lib-chip lib-flip" data-lib="day" data-date="${after}" aria-label="Later entry" ${after ? '' : 'disabled'}>${icon('back')}</button>
     </div>`;
   S.pages.hidden = false;
-  requestAnimationFrame(() => S?.pages.classList.add('on'));
-  if (matchMedia('(hover: hover)').matches) S.pages.querySelector('#lib-body')?.focus({ preventScroll: true });
+  const redraw = () => drawPages();
+  for (const ta of S.pages.querySelectorAll('textarea')) {
+    ta.addEventListener('focus', () => { S.caretOn = true; markSide(ta.name); redraw(); });
+    ta.addEventListener('blur', () => { setTimeout(() => { if (S && !S.pages.contains(document.activeElement)) { markSide(null); if (narrow()) { S.open && (S.open.side = S.open.side); } } redraw(); }, 0); });
+    ta.addEventListener('keyup', redraw);
+    ta.addEventListener('select', redraw);
+  }
+  S.on(document, 'selectionchange', () => { if (S?.pages.contains(document.activeElement)) drawPages(); });
+  clearInterval(S.blink);
+  S.blink = setInterval(() => { if (!S?.open) return; S.caretOn = !S.caretOn; if (S.pages.contains(document.activeElement) && document.activeElement.tagName === 'TEXTAREA') drawPages(); }, 530);
+  if (window.visualViewport && !S.vvBound) {
+    S.vvBound = true;
+    S.on(window.visualViewport, 'resize', () => { if (S?.open?.book) settleBook(); });
+  }
 }
 
-function hidePages() {
+function markSide(side) {
+  S.pages.querySelectorAll('.lib-side').forEach(b => b.classList.toggle('on', b.dataset.side === side));
+}
+
+function focusSide(side) {
+  if (!S?.open) return;
+  const ta = S.pages.querySelector(`[name="${side}"]`);
+  if (!ta) return;
+  S.open.side = side;
+  ta.focus({ preventScroll: true });
+  const end = ta.value.length;
+  try { ta.setSelectionRange(end, end); } catch { /* ignore */ }
+  markSide(side);
+  settleBook();
+  drawPages();
+}
+
+function hideInk() {
   saveNow();
+  clearInterval(S.blink);
+  document.activeElement?.blur?.();
   S.pages.classList.remove('on');
   S.pages.hidden = true;
   S.pages.innerHTML = '';
+}
+
+function pickPage(e) {
+  const r = S.renderer.domElement.getBoundingClientRect();
+  pointer.set(((e.clientX - r.left) / r.width) * 2 - 1, -((e.clientY - r.top) / r.height) * 2 + 1);
+  ray.setFromCamera(pointer, S.camera);
+  const hit = ray.intersectObjects([S.leftPage.mesh, S.rightPage.mesh], false)[0];
+  return hit?.object.userData.side || null;
 }
 
 function onPageInput(e) {
@@ -654,10 +868,10 @@ function onPageInput(e) {
   if (e.target.name === 'workoutId') {
     const link = S.pages.querySelector('[data-lib-link]');
     link.href = e.target.value ? `#/item/${encodeURIComponent(e.target.value)}` : '#/workouts';
-    link.textContent = e.target.value ? 'Open' : 'Browse';
   }
   S.pendingSave = { date: S.open.date, body: S.pages.querySelector('[name="body"]').value, nextWorkout: S.pages.querySelector('[name="nextWorkout"]').value, workoutId: S.pages.querySelector('[name="workoutId"]').value };
-  const note = S.pages.querySelector('.lib-saved'); if (note) note.textContent = 'Writing…';
+  S.saveNote = 'Writing…';
+  drawPages();
   clearTimeout(S.saveT);
   S.saveT = setTimeout(saveNow, e.type === 'change' ? 0 : 700);
 }
@@ -671,8 +885,39 @@ async function saveNow() {
   try {
     if (!body.trim() && !nextWorkout.trim() && !workoutId) { if (existing) await deleteItem(existing.id); }
     else await saveItem({ id: entryId(date), type: 'journal', title: longDate(date), date, body, nextWorkout, workoutId });
-    const note = S?.pages.querySelector('.lib-saved'); if (note) note.textContent = 'Saved';
+    if (S) { S.saveNote = 'Saved'; drawPages(); const n = S.pages.querySelector('.lib-saved'); if (n) n.textContent = 'Saved'; }
   } catch (error) { toast(error.message || 'Couldn’t save that page'); }
+}
+
+// ---------- no WebGL: plain pages ----------
+function showFlatPages(date) {
+  const e = entry(date) || {};
+  const workouts = byType('workout').sort((a, b) => a.title.localeCompare(b.title));
+  const { before, after } = navStops(date);
+  S.pages.className = 'lib-pages';
+  S.pages.innerHTML = `
+    <div class="lib-book" role="dialog" aria-modal="true" aria-label="${escape(longDate(date))}">
+      <div class="lib-page lib-left">
+        <header class="lib-head">
+          <button class="lib-chip" data-lib="day" data-date="${before}" aria-label="Earlier entry" ${before ? '' : 'disabled'}>${icon('back')}</button>
+          <h2>${escape(longDate(date).replace(/^\w+, /, ''))}</h2>
+          <button class="lib-chip lib-flip" data-lib="day" data-date="${after}" aria-label="Later entry" ${after ? '' : 'disabled'}>${icon('back')}</button>
+        </header>
+        <label class="lib-label" for="lib-body">Thoughts</label>
+        <textarea id="lib-body" name="body" class="lib-lines" placeholder="What’s on your mind today?">${escape(e.body || '')}</textarea>
+      </div>
+      <div class="lib-page lib-right">
+        <label class="lib-label" for="lib-next">${icon('dumbbell')}Next time at the gym</label>
+        <textarea id="lib-next" name="nextWorkout" class="lib-lines lib-short">${escape(e.nextWorkout || '')}</textarea>
+        <label class="lib-label" for="lib-workout">Saved workout</label>
+        <div class="lib-row"><select id="lib-workout" name="workoutId"><option value="">None</option>${workouts.map(w => `<option value="${escape(w.id)}" ${w.id === e.workoutId ? 'selected' : ''}>${escape(w.title)}</option>`).join('')}</select>
+        <a class="lib-chip lib-go" href="${e.workoutId ? `#/item/${encodeURIComponent(e.workoutId)}` : '#/workouts'}" data-lib-link>Open</a></div>
+        <p class="lib-saved" aria-live="polite"></p>
+        <button class="btn btn-soft lib-close" data-lib="close">${icon('close')}Back on the shelf</button>
+      </div>
+    </div>`;
+  S.pages.hidden = false;
+  requestAnimationFrame(() => S?.pages.classList.add('on'));
 }
 
 // ---------- no WebGL: a simple shelf of buttons ----------
