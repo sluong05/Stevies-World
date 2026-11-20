@@ -36,12 +36,12 @@ function months() {
 }
 
 // Small stable random numbers per date, so each book keeps its look.
-function rand(seed) {
+export function rand(seed) {
   let h = 2166136261;
   for (const c of seed) h = Math.imul(h ^ c.charCodeAt(0), 16777619);
   return () => { h = Math.imul(h ^ (h >>> 15), 2246822507); h = Math.imul(h ^ (h >>> 13), 3266489909); return ((h ^= h >>> 16) >>> 0) / 4294967296; };
 }
-const BOOK_COLORS = ['#7a2e2a', '#2f4f3a', '#24344f', '#8a5a1f', '#5a2f4a', '#4a3424', '#1f4a4a', '#6b3a1f', '#3d4a2a', '#8c3b2e', '#2e3b5c', '#5c4a2e'];
+export const BOOK_COLORS = ['#7a2e2a', '#2f4f3a', '#24344f', '#8a5a1f', '#5a2f4a', '#4a3424', '#1f4a4a', '#6b3a1f', '#3d4a2a', '#8c3b2e', '#2e3b5c', '#5c4a2e'];
 
 // ---------- layout ----------
 const PER_SHELF = 8, SHELVES = 4;
@@ -150,7 +150,7 @@ export function refresh() {
 }
 
 // ---------- textures ----------
-function canvasTex(w, h, draw) {
+export function canvasTex(w, h, draw) {
   const c = document.createElement('canvas');
   c.width = w; c.height = h;
   draw(c.getContext('2d'), w, h);
@@ -160,7 +160,7 @@ function canvasTex(w, h, draw) {
   return t;
 }
 
-function woodTex(base, dark, w = 512, h = 128, rings = 26) {
+export function woodTex(base, dark, w = 512, h = 128, rings = 26) {
   return canvasTex(w, h, (g, W, H) => {
     g.fillStyle = base; g.fillRect(0, 0, W, H);
     const r = rand(base + dark);
@@ -175,7 +175,7 @@ function woodTex(base, dark, w = 512, h = 128, rings = 26) {
   });
 }
 
-function shade(hex, k) {
+export function shade(hex, k) {
   const n = parseInt(hex.slice(1), 16);
   const f = v => Math.max(0, Math.min(255, Math.round(v * k)));
   return `rgb(${f(n >> 16)}, ${f((n >> 8) & 255)}, ${f(n & 255)})`;
@@ -481,7 +481,7 @@ function onHudClick(e) {
 }
 
 // ---------- animation ----------
-const ease = t => (t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2);
+export const ease = t => (t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2);
 function tween(ms, step) {
   if (S.reduced) ms = Math.min(ms, 120);
   return new Promise(resolve => {
@@ -497,14 +497,15 @@ function tween(ms, step) {
 }
 
 // ---------- writing straight onto the 3D pages ----------
+// Shared with the Kitchen's cookbooks (src/kitchen.js).
 // Each open page is a curved mesh with a canvas texture. Typing goes into a hidden
 // textarea (so phone keyboards, autocorrect and dictation all work) and is painted onto
 // the page as you type, so the letters bend with the paper.
-const PAGE_W = 768, PAGE_H = 1024;
-const INK = '#2e1e10', FADED = 'rgba(74, 48, 32, .45)', RULE = 'rgba(90, 120, 160, .32)', LABEL = '#8a5a2e';
-const HAND = '"Kiwi Maru", Georgia, serif';
+export const PAGE_W = 768, PAGE_H = 1024;
+export const INK = '#2e1e10', FADED = 'rgba(74, 48, 32, .45)', RULE = 'rgba(90, 120, 160, .32)', LABEL = '#8a5a2e';
+export const HAND = '"Kiwi Maru", Georgia, serif';
 
-function curvedPage(gutterAtLeft) {
+export function curvedPage(gutterAtLeft) {
   // A 1×1 sheet that rises out of the gutter and settles toward the outer edge.
   const geo = new THREE.PlaneGeometry(1, 1, 40, 1);
   const p = geo.attributes.position;
@@ -547,7 +548,7 @@ function detachPages() {
 }
 
 // Lay text out in lines that fit the page, remembering where each line starts so the caret can be placed.
-function layout(g, text, maxW) {
+export function layout(g, text, maxW) {
   const lines = [];
   let index = 0;
   for (const para of text.split('\n')) {
@@ -567,7 +568,7 @@ function layout(g, text, maxW) {
   return lines;
 }
 
-function paper(g, gutterLeft) {
+export function paper(g, gutterLeft) {
   const grad = g.createLinearGradient(0, 0, PAGE_W, 0);
   const a = '#e6d5ae', b = '#f6ecd4';
   if (gutterLeft) { grad.addColorStop(0, a); grad.addColorStop(0.12, b); grad.addColorStop(1, '#f1e4c6'); }

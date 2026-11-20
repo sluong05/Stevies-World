@@ -14,6 +14,7 @@ const main = $('#main');
 let lastRoute = '';
 let lastListRoute = '#/';
 let libraryMod = null;
+let kitchenMod = null;
 
 function parseRoute() {
   const hash = location.hash.replace(/^#/, '') || '/';
@@ -31,6 +32,21 @@ function render({ keepScroll = false } = {}) {
   let tab = '';
   document.body.classList.toggle('in-mode', a === 'item' && (c === 'cook' || c === 'go'));
   if (a !== 'library' && libraryMod) libraryMod.unmount();
+  // The Kitchen is a 3D cookbook shelf (src/kitchen.js); #/recipes/list keeps the plain list.
+  const kitchen3d = a === 'recipes' && b !== 'list' && document.documentElement.dataset.theme !== 'plain';
+  if (!kitchen3d && kitchenMod) kitchenMod.unmount();
+  if (kitchen3d) {
+    $$('[data-tab]').forEach(el => (el.dataset.tab === 'recipes' ? el.setAttribute('aria-current', 'page') : el.removeAttribute('aria-current')));
+    lastRoute = routeKey; lastListRoute = '#/recipes';
+    if (main.dataset.view === 'kitchen' && kitchenMod?.mounted()) { kitchenMod.route(b || '', c || ''); return; }
+    main.innerHTML = '<section class="library kitchen" id="kitchen"><p class="lib-loading">Warming up the kitchen…</p></section>';
+    main.dataset.view = 'kitchen';
+    worldMod?.show(null); setRoom(null);
+    const label = $('#room-name'); if (label) label.textContent = 'Kitchen';
+    window.scrollTo({ top: 0, behavior: 'instant' });
+    import('./kitchen.js').then(m => { kitchenMod = m; const p = parseRoute().parts; if (p[0] === 'recipes' && p[1] !== 'list' && main.dataset.view === 'kitchen') m.mount($('#kitchen'), p[1] || '', p[2] || ''); });
+    return;
+  }
   if (a === 'library') {
     const mark = () => $$('[data-tab]').forEach(el => (el.dataset.tab === 'library' ? el.setAttribute('aria-current', 'page') : el.removeAttribute('aria-current')));
     lastRoute = routeKey; mark();
@@ -104,6 +120,7 @@ store.onChange(() => {
   // Don't rebuild a form while someone is typing in it.
   if (['new', 'edit', 'draft', 'add'].includes(parts[0])) return;
   if (parts[0] === 'library') { libraryMod?.refresh(); return; }
+  if (parts[0] === 'recipes' && main.dataset.view === 'kitchen') { kitchenMod?.refresh(); return; }
   if (parts[0] === 'settings' && document.activeElement?.name === 'passcode') return;
   const y = window.scrollY;
   render({ keepScroll: true });

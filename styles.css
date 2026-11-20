@@ -795,3 +795,29 @@ body[data-screen="full"] #main { padding-bottom: 0; }
 body.world-failed .room-fallback { position: static; width: auto; height: auto; overflow: visible; clip: auto; white-space: normal; }
 body.world-failed .room-stage-full { display: none; }
 body.world-failed[data-screen="full"] .topbar { position: sticky; opacity: 1; pointer-events: auto; background: var(--bar); }
+/* ---------- Kitchen: the 3D cookbook shelf (src/kitchen.js) ---------- */
+.kitchen { background: #2a1c12; }
+.kit-top { position: absolute; inset: 0 0 auto 0; display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 10px 12px 18px;
+  background: linear-gradient(to bottom, rgba(20, 12, 7, .8), transparent); transition: opacity .3s; z-index: 2; }
+body.lib-reading .kit-top { opacity: 0; pointer-events: none; }
+.kit-search { flex: 1 1 160px; min-width: 0; display: flex; align-items: center; gap: 6px; height: 40px; padding: 0 12px; border-radius: 999px;
+  background: rgba(30, 18, 10, .78); border: 1px solid rgba(233, 196, 106, .45); color: #f3e6cc; }
+.kit-search .icon { width: 18px; height: 18px; flex: none; opacity: .8; }
+.kit-search input { flex: 1; min-width: 0; border: 0; outline: none; background: transparent; color: inherit; font: 16px var(--font-body); }
+.kit-search input::placeholder { color: rgba(243, 230, 204, .6); }
+.kit-group select { appearance: none; -webkit-appearance: none; border: 0; background: transparent; color: inherit; font: inherit; cursor: pointer; padding-right: 2px; }
+.kit-group option { color: #2e1e10; }
+.kit-results { position: absolute; top: 56px; left: 12px; right: 12px; max-width: 520px; max-height: 50vh; overflow-y: auto; border-radius: 14px;
+  background: #f6ecd4; color: #2e1e10; box-shadow: 0 12px 30px rgba(0, 0, 0, .5); padding: 6px; touch-action: pan-y; }
+.kit-results[hidden] { display: none; }
+.kit-results a { display: grid; grid-template-columns: auto 1fr; column-gap: 8px; padding: 10px 12px; border-radius: 10px; color: inherit; text-decoration: none; }
+.kit-results a:hover, .kit-results a:focus-visible { background: rgba(201, 164, 106, .3); }
+.kit-results a .icon { grid-row: span 2; width: 16px; height: 16px; color: #b3262a; align-self: center; }
+.kit-results strong { font: 600 16px Georgia, serif; }
+.kit-results small { grid-column: 2; font-size: 13px; color: #8a5a2e; }
+.kit-results p { margin: 0; padding: 12px; font: italic 15px Georgia, serif; }
+.kit-heart.on { background: #b3262a; border-color: #e9c46a; color: #fff3da; }
+.kit-heart.on .icon { fill: currentColor; }
+@media (max-width: 480px) {
+  .kit-add span, .kit-wide { display: none; }
+}
