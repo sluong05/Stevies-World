@@ -5,7 +5,7 @@
 // Signs are real links laid over the canvas, so everything still works by keyboard and
 // screen reader, and the page keeps a plain list of doors in case WebGL is unavailable.
 import * as THREE from '../vendor/three.module.min.js';
-import { byType, getItem } from './store.js';
+import { byType, getItem, isSaved, search, toggleSaved } from './store.js';
 import { toggleTask, toggleStar, quickAdd } from './todo.js';
 import { groupTasks, dueLabel, todayISO } from '../shared/tasks.js';
 import { toast } from './ui.js';
@@ -376,10 +376,18 @@ function gym(night) {
   lights(scene, night, 0xfff4e0);
   const spots = [];
   const accent = cssVar('--accent', '#3f6e3c');
-  // mirror wall
-  const mirror = box(5, 1.8, 0.03, glow(night ? 0x5a6a80 : 0xcfe2ea), 0, 1.5, 0.02);
-  const mg = new THREE.Group(); mg.add(mirror); box(5.1, 0.06, 0.05, 0x9aa3ab, 0, 2.42, 0.03, mg); box(5.1, 0.06, 0.05, 0x9aa3ab, 0, 0.58, 0.03, mg);
-  onWall(mg, 'back', 0, W, D); scene.add(mg);
+  // mirror over the rack
+  const mirror = box(2.8, 1.5, 0.03, glow(night ? 0x5a6a80 : 0xcfe2ea), 0, 1.65, 0.02);
+  const mg = new THREE.Group(); mg.add(mirror); box(2.9, 0.06, 0.05, 0x9aa3ab, 0, 2.42, 0.03, mg); box(2.9, 0.06, 0.05, 0x9aa3ab, 0, 0.88, 0.03, mg);
+  onWall(mg, 'back', 1.2, W, D); scene.add(mg);
+  // the workout whiteboard: every workout written up, with search, filters and favorites
+  const wb = new THREE.Group();
+  box(1.42, 2.02, 0.04, 0xb8bec4, 0, 0, 0, wb);
+  box(1.3, 0.05, 0.12, 0xb8bec4, 0, -1.02, 0.06, wb);
+  [0xc4513f, 0x3a6a8a, 0x5f9a45].forEach((c, i) => { const m = cyl(0.016, 0.016, 0.14, c, -0.4 + i * 0.18, -0.99, 0.08, wb, 8); m.rotation.z = Math.PI / 2; });
+  const wbPanel = makePanel(1.3, 1.9, 768, 1122);
+  wb.add(wbPanel.mesh); wbPanel.mesh.position.z = 0.025;
+  wb.position.y = 1.55; onWall(wb, 'back', -2.4, W, D); scene.add(wb);
   // dumbbell rack
   const rack = new THREE.Group();
   box(2.6, 0.06, 0.5, 0x2b2b2b, 0, 0.55, 0.3, rack); box(2.6, 0.06, 0.5, 0x2b2b2b, 0, 0.25, 0.3, rack);
@@ -393,7 +401,7 @@ function gym(night) {
       db.position.set(-1.0 + i * 0.4, y + s, 0.3); db.rotation.y = Math.PI / 2; rack.add(db);
     });
   }
-  onWall(rack, 'back', 0, W, D); rack.position.z += 0.2; scene.add(rack);
+  onWall(rack, 'back', 1.2, W, D); rack.position.z += 0.2; scene.add(rack);
   // bench + barbell on stands
   const bench = new THREE.Group();
   box(0.4, 0.12, 1.4, 0x2b2b2b, 0, 0.45, 0, bench); box(0.42, 0.08, 1.42, 0xc4513f, 0, 0.53, 0, bench);
@@ -421,14 +429,29 @@ function gym(night) {
   cg.position.y = 2.9; onWall(cg, 'left', 0, W, D); cg.position.x += 0.02; scene.add(cg);
   const back = door({ color: 0x3a6a8a, glass: true }); onWall(back, 'front', 0, W, D); scene.add(back);
   spots.push({ label: 'Living room', href: '#/', pos: back.localToWorld(new THREE.Vector3(0, 2.52, 0.1)), target: back.localToWorld(new THREE.Vector3(0, 1.2, 0.6)), mesh: back, back: true });
+  scene.updateMatrixWorld(true);
+  const panels = { whiteboard: wbPanel };
+  let blink = 0;
   return {
     scene, spots, eye: new THREE.Vector3(0, 1.7, 2.8), yawCenter: Math.PI, yawRange: 1.1, pitch: -0.24,
+    focus: { whiteboard: focusOf(wbPanel.mesh) },
+    panels,
+    refresh() { wbPanel.dirty = true; },
     update(dt, t) {
+      const b = Math.floor(t * 2);
+      if (b !== blink && document.activeElement === searchInput) { blink = b; wbPanel.dirty = true; }
+      if (wbPanel.dirty) { wbPanel.dirty = false; drawGym(wbPanel, night); }
       bagPivot.rotation.z = Math.sin(t * 1.1) * 0.06; bagPivot.rotation.x = Math.sin(t * 0.8) * 0.04;
       hand2.parent.rotation.z = 0; hand2.rotation.z = -t; hand2.position.set(Math.sin(t) * 0.07, Math.cos(t) * 0.07, 0.02);
       void chain; void bag; void hand;
     },
   };
+}
+
+function focusOf(mesh) {
+  const center = mesh.getWorldPosition(new THREE.Vector3());
+  const normal = new THREE.Vector3(0, 0, 1).applyQuaternion(mesh.getWorldQuaternion(new THREE.Quaternion()));
+  return { center, normal, w: mesh.geometry.parameters.width, h: mesh.geometry.parameters.height, mesh };
 }
 
 // ---------- canvas panels: flat screens and papers drawn with 2D canvas, shown in 3D ----------
@@ -613,6 +636,106 @@ function drawBoard(p, night) {
   p.tex.needsUpdate = true;
 }
 
+// The gym whiteboard: workouts written up like a class schedule.
+const gymState = { filter: 'All', quick: '' };
+function gymItems() {
+  let items = byType('workout');
+  const f = gymState.filter;
+  if (f === 'Favorites') items = items.filter(i => isSaved(i.id));
+  else if (f !== 'All') items = items.filter(i => (i.focus || 'Other') === f);
+  if (gymState.quick === 'short') items = items.filter(i => i.minutes && i.minutes <= 30);
+  if (gymState.quick === 'noequip') items = items.filter(i => !i.equipment || /bodyweight/i.test(i.equipment));
+  const q = (searchInput?.value || '').trim();
+  if (q) items = search(q, items);
+  else items.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+  return items;
+}
+function drawGym(p, night) {
+  const { g, canvas } = p, W = canvas.width, H = canvas.height;
+  const ink = '#24303a', soft = '#6a7680', blue = '#2f5f9a', red = '#c4513f', green = '#3f7a3c';
+  g.fillStyle = night ? '#e9edf0' : '#fbfcfd'; g.fillRect(0, 0, W, H);
+  g.fillStyle = 'rgba(120,140,160,.06)'; for (let i = 0; i < 6; i++) { g.beginPath(); g.ellipse(120 + i * 110, 300 + (i % 3) * 260, 90, 30, 0.3, 0, 7); g.fill(); }
+  p.hits = [];
+  const btn = (x, y, w, label, color, fn, on = true) => {
+    g.lineWidth = 4; g.strokeStyle = color; rr(g, x, y, w, 58, 29); g.stroke();
+    if (on) { g.fillStyle = color; rr(g, x, y, w, 58, 29); g.fill(); }
+    g.fillStyle = on ? '#fff' : color; g.font = `600 27px ${FONT}`; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText(label, x + w / 2, y + 30); g.textAlign = 'left';
+    p.hits.push({ x, y, w, h: 58, fn });
+    return x + w;
+  };
+  btn(24, 22, 206, '← Living room', green, () => { location.hash = '#/'; }, false);
+  btn(W - 144, 22, 120, '+ Add', green, () => { location.hash = '#/add?type=workout'; });
+  const all = byType('workout');
+  const items = gymItems();
+  g.fillStyle = blue; g.font = `500 66px ${HEAD}`; g.textBaseline = 'alphabetic'; g.fillText('Workouts', 28, 150);
+  const tw = g.measureText('Workouts').width;
+  g.fillStyle = soft; g.font = `400 25px ${FONT}`; g.fillText(items.length === all.length ? `${all.length}` : `${items.length} of ${all.length}`, 28 + tw + 18, 150);
+  // search (typed into a hidden input, written here)
+  const val = searchInput?.value || '';
+  const typing = document.activeElement === searchInput;
+  g.lineWidth = 3; g.strokeStyle = typing ? blue : '#c9d1d8'; rr(g, 24, 176, W - 48, 66, 33); g.stroke();
+  g.fillStyle = soft; g.beginPath(); g.arc(62, 207, 12, 0, 7); g.lineWidth = 3; g.strokeStyle = soft; g.stroke(); g.fillRect(70, 214, 10, 3);
+  g.font = `400 28px ${FONT}`; g.textBaseline = 'middle'; g.fillStyle = val ? ink : soft;
+  const shown = ellipsis(g, val || 'Search workouts…', W - 220);
+  g.fillText(shown, 94, 210);
+  if (typing && Math.floor(performance.now() / 500) % 2) { g.fillStyle = blue; g.fillRect(94 + (val ? g.measureText(shown).width : 0) + 2, 190, 3, 38); }
+  if (val) { g.fillStyle = soft; g.font = `600 30px ${FONT}`; g.fillText('×', W - 66, 208); p.hits.push({ x: W - 96, y: 176, w: 72, h: 66, fn: () => { searchInput.value = ''; } }); }
+  p.hits.push({ x: 24, y: 176, w: W - 120, h: 66, fn: () => focusSearch() });
+  // filter chips (wrap)
+  const cats = ['All', 'Favorites', ...[...new Set(all.map(i => i.focus || 'Other'))].sort()];
+  if (!cats.includes(gymState.filter)) gymState.filter = 'All';
+  let x = 24, y = 262;
+  g.font = `600 24px ${FONT}`;
+  const chip = (label, on, color, fn) => {
+    const w = g.measureText(label).width + 40;
+    if (x + w > W - 24) { x = 24; y += 58; }
+    g.lineWidth = 3; g.strokeStyle = color; rr(g, x, y, w, 46, 23); g.stroke();
+    if (on) { g.fillStyle = color; rr(g, x, y, w, 46, 23); g.fill(); }
+    g.fillStyle = on ? '#fff' : color; g.textBaseline = 'middle'; g.fillText(label, x + 20, y + 24);
+    p.hits.push({ x, y, w, h: 46, fn });
+    x += w + 12;
+  };
+  cats.forEach(c => chip(c === 'Favorites' ? '♥ Favorites' : c, gymState.filter === c, blue, () => { gymState.filter = c; p.scroll = 0; }));
+  x = 24; y += 58;
+  [['short', '30 min or less'], ['noequip', 'No equipment']].forEach(([k, l]) => chip(l, gymState.quick === k, red, () => { gymState.quick = gymState.quick === k ? '' : k; p.scroll = 0; }));
+  chip('🎲 Pick one', false, green, () => {
+    const favs = items.filter(i => isSaved(i.id));
+    const from = favs.length >= 2 ? favs : items;
+    if (from.length) location.hash = `#/item/${encodeURIComponent(from[Math.floor(Math.random() * from.length)].id)}`;
+  });
+  // the list
+  const top = y + 66, bottom = H - 70;
+  g.strokeStyle = '#d5dbe0'; g.lineWidth = 2; g.beginPath(); g.moveTo(24, top - 8); g.lineTo(W - 24, top - 8); g.stroke();
+  g.save(); g.beginPath(); g.rect(0, top, W, bottom - top); g.clip();
+  const ROWH = 116;
+  const magnets = [red, blue, green, '#e0a63a', '#8a5a9a'];
+  items.forEach((it, i) => {
+    const ry = top + 8 + i * ROWH - p.scroll;
+    if (ry + ROWH < top || ry > bottom) return;
+    g.fillStyle = magnets[i % magnets.length]; g.beginPath(); g.arc(50, ry + 40, 15, 0, 7); g.fill();
+    g.fillStyle = 'rgba(255,255,255,.5)'; g.beginPath(); g.arc(45, ry + 35, 5, 0, 7); g.fill();
+    g.fillStyle = ink; g.font = `600 31px ${FONT}`; g.textBaseline = 'alphabetic';
+    g.fillText(ellipsis(g, it.title, W - 200), 84, ry + 50);
+    const n = (it.blocks || []).reduce((k, b) => k + b.exercises.length, 0);
+    const meta = [it.minutes ? (it.minutes < 60 ? `${Math.round(it.minutes)} min` : `${Math.floor(it.minutes / 60)} hr ${Math.round(it.minutes % 60) || ''}`.trim()) : '', n ? `${n} exercise${n === 1 ? '' : 's'}` : '', it.focus || ''].filter(Boolean).join('  ·  ');
+    g.fillStyle = soft; g.font = `400 24px ${FONT}`; g.fillText(ellipsis(g, meta, W - 200), 84, ry + 86);
+    const saved = isSaved(it.id);
+    g.font = `400 44px ${FONT}`; g.textBaseline = 'middle'; g.fillStyle = saved ? red : '#c9d1d8'; g.fillText(saved ? '♥' : '♡', W - 86, ry + 50);
+    g.strokeStyle = '#eef1f3'; g.lineWidth = 2; g.beginPath(); g.moveTo(84, ry + ROWH - 6); g.lineTo(W - 24, ry + ROWH - 6); g.stroke();
+    if (ry > top - 30 && ry + ROWH < bottom + 30) {
+      p.hits.push({ x: 24, y: ry, w: W - 150, h: ROWH - 8, fn: () => { location.hash = `#/item/${encodeURIComponent(it.id)}`; } });
+      p.hits.push({ x: W - 120, y: ry, w: 96, h: ROWH - 8, fn: () => toggleSaved(it.id).then(on => toast(on ? 'Added to favorites' : 'Removed from favorites')) });
+    }
+  });
+  if (!items.length) { g.fillStyle = soft; g.font = `400 28px ${FONT}`; g.textBaseline = 'alphabetic'; wrap(g, all.length ? 'Nothing here with these filters.' : 'No workouts yet. Tap + Add to paste one from TikTok or Instagram, or write your own.', W - 80).forEach((l, k) => g.fillText(l, 40, top + 60 + k * 40)); }
+  g.restore();
+  p.maxScroll = Math.max(0, items.length * ROWH + 16 - (bottom - top));
+  if (p.maxScroll > 0) { const frac = (bottom - top) / (bottom - top + p.maxScroll); const bh = (bottom - top) * frac; g.fillStyle = 'rgba(0,0,0,.15)'; rr(g, W - 12, top + (bottom - top - bh) * (p.scroll / p.maxScroll), 6, bh, 3); g.fill(); }
+  // marker tray hint
+  g.fillStyle = soft; g.font = `400 22px ${FONT}`; g.textBaseline = 'alphabetic'; g.fillText(p.maxScroll > 0 ? 'Drag up and down to see more' : '', 28, H - 26);
+  p.tex.needsUpdate = true;
+}
+
 function office(night) {
   const scene = new THREE.Scene();
   const W = 8, D = 8;
@@ -660,11 +783,6 @@ function office(night) {
   const win = windowPane(night ? 0x1d2a52 : 0xa9d4ef, night, scene, 1.4, 1.2); win.position.y = 1.7; onWall(win, 'right', -1.4, W, D);
   const back = door({ color: 0x7b8f4a }); onWall(back, 'front', 0, W, D); scene.add(back);
   scene.updateMatrixWorld(true);
-  const focusOf = mesh => {
-    const center = mesh.getWorldPosition(new THREE.Vector3());
-    const normal = new THREE.Vector3(0, 0, 1).applyQuaternion(mesh.getWorldQuaternion(new THREE.Quaternion()));
-    return { center, normal, w: mesh.geometry.parameters.width, h: mesh.geometry.parameters.height, mesh };
-  };
   const at = (o, v) => o.localToWorld(new THREE.Vector3(...v));
   spots.push({ label: 'To-do', sub: 'Monitor', href: '#/todo', pos: at(monitor, [0, 0.6, 0]), target: at(monitor, [0, 0, 1]), mesh: monitor, here: true });
   spots.push({ label: 'Notes', sub: 'Corkboard', href: '#/notes', pos: at(board, [0, 0.98, 0.05]), target: at(board, [0, 0, 1.2]), mesh: board, here: true });
@@ -689,7 +807,9 @@ function office(night) {
 const ROOMS = { living: livingRoom, kitchen, gym, office };
 
 // ---------- typing on the monitor ----------
-let deskInput = null;
+let deskInput = null, searchInput = null;
+function focusSearch() { searchInput?.focus({ preventScroll: true }); if (room?.panels?.whiteboard) room.panels.whiteboard.dirty = true; }
+const blurTyping = () => { for (const el of [deskInput, searchInput]) if (el && document.activeElement === el) el.blur(); };
 function focusDesk() { deskInput?.focus({ preventScroll: true }); if (room?.panels) room.panels.monitor.dirty = true; }
 async function submitDesk() {
   const text = deskInput?.value.trim();
@@ -715,6 +835,14 @@ function ensure() {
   deskInput.addEventListener('input', () => { if (room?.panels) room.panels.monitor.dirty = true; });
   deskInput.addEventListener('blur', () => { if (room?.panels) room.panels.monitor.dirty = true; });
   deskInput.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); submitDesk(); } });
+  searchInput = document.createElement('input');
+  searchInput.className = 'lib-hidden-input'; searchInput.id = 'gym-search'; searchInput.type = 'search';
+  searchInput.setAttribute('aria-label', 'Search workouts'); searchInput.setAttribute('enterkeyhint', 'search'); searchInput.autocomplete = 'off';
+  document.body.append(searchInput);
+  const dirtyBoard = () => { const p = room?.panels?.whiteboard; if (p) { p.dirty = true; p.scroll = 0; } };
+  searchInput.addEventListener('input', dirtyBoard);
+  searchInput.addEventListener('blur', () => { if (room?.panels?.whiteboard) room.panels.whiteboard.dirty = true; });
+  searchInput.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); searchInput.blur(); } });
   renderer.domElement.addEventListener('webglcontextlost', e => { e.preventDefault(); failed = true; stop(); document.body.classList.remove('world-live'); document.body.classList.add('world-failed'); });
   addEventListener('resize', () => { resize(); wake(); });
   addEventListener('scroll', onScroll, { passive: true });
@@ -761,13 +889,16 @@ function tapAt(x, y) {
   const p = focusName && room.panels?.[focusName];
   if (p) {
     const hit = ray.intersectObject(p.mesh)[0];
-    if (!hit?.uv) { if (deskInput && document.activeElement === deskInput) deskInput.blur(); return; }
+    if (!hit?.uv) { blurTyping(); return; }
     const cx = hit.uv.x * p.canvas.width, cy = (1 - hit.uv.y) * p.canvas.height;
     for (let i = p.hits.length - 1; i >= 0; i--) {
       const h = p.hits[i];
-      if (cx >= h.x && cx <= h.x + h.w && cy >= h.y && cy <= h.y + h.h) { h.fn(); p.dirty = true; wake(); return; }
+      if (cx >= h.x && cx <= h.x + h.w && cy >= h.y && cy <= h.y + h.h) {
+        if (h.fn !== undefined && !/focus(Desk|Search)/.test(String(h.fn))) blurTyping();
+        h.fn(); p.dirty = true; wake(); return;
+      }
     }
-    if (document.activeElement === deskInput) deskInput.blur();
+    blurTyping();
     return;
   }
   for (const s of room.spots) {
@@ -879,7 +1010,7 @@ export function show(name, theme, focus = null) {
     stop(); disposeRoom(); focusName = null;
     document.body.classList.remove('world-live', 'world-walking');
     if (signs) signs.innerHTML = '';
-    deskInput?.blur();
+    blurTyping();
     return;
   }
   if (!ensure()) return;
@@ -894,12 +1025,14 @@ export function show(name, theme, focus = null) {
     room.scene.background = new THREE.Color(night ? 0x1a1410 : 0xf3e6cc);
     room.scene.updateMatrixWorld(true);
     clock = new THREE.Clock();
-    yawUser = 0; yawVel = 0; flying = null; snap = true;
+    yawUser = 0; yawVel = 0; flying = null; snap = false;
+    camPos.copy(room.eye); camLook.set(room.eye.x + Math.sin(room.yawCenter), room.eye.y + room.pitch, room.eye.z + Math.cos(room.yawCenter));
     signs.innerHTML = room.spots.map((s, i) => `<a class="sign ${s.back ? 'sign-back' : ''}" data-spot="${i}" href="${s.href}"><strong>${s.back ? '← ' : ''}${s.label}</strong>${s.sub ? `<small>${s.sub}</small>` : ''}</a>`).join('');
   }
   if (focus !== focusName && room.panels) { for (const p of Object.values(room.panels)) { p.scroll = 0; p.open = null; } }
   focusName = room.focus?.[focus] ? focus : null;
-  if (focusName !== 'monitor') deskInput?.blur();
+  if (focusName !== 'monitor' && document.activeElement === deskInput) deskInput.blur();
+  if (focusName !== 'whiteboard' && document.activeElement === searchInput) searchInput.blur();
   room.refresh?.();
   resize(); onScroll(); wake();
 }

@@ -97,8 +97,8 @@ function render({ keepScroll = false } = {}) {
 
 // The house (see world3d.js): each section is a room, loaded after the page has painted.
 const ROOM_OF = { '': 'living', recipes: 'kitchen', workouts: 'gym', office: 'office', todo: 'office', notes: 'office' };
-const FOCUS_OF = { todo: 'monitor', notes: 'board' };
-const FULL = new Set(['', 'office', 'todo', 'notes']);
+const FOCUS_OF = { todo: 'monitor', notes: 'board', workouts: 'whiteboard' };
+const FULL = new Set(['', 'office', 'todo', 'notes', 'workouts']);
 const ROOM_LABEL = { living: 'Living room', kitchen: 'Kitchen', gym: 'Gym', office: 'Office' };
 let worldMod = null;
 function setRoom(room) {
