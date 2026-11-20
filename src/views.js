@@ -79,10 +79,11 @@ export function homeView() {
   const sync = syncState();
   const hero = theme === 'plain'
     ? `<section class="hero hero-plain"><h1>${greeting()}, Steven.</h1></section>`
-    : `<section class="hero"><div class="hero-window">${theme === 'retro' ? `<div class="titlebar"><span>stevies_world.exe</span><span class="titlebar-buttons" aria-hidden="true"><i></i><i></i><i></i></span></div>` : ''}
-        <div class="hero-scene" data-3d="home" data-time="${time}">${scenery(time)}</div>
-        <h1 class="hero-greeting">${greeting()}, Steven.</h1></div></section>`;
+    : `<section class="room-stage room-stage-home" aria-label="Living room"><div class="stage-fallback">${scenery(time)}</div>
+        <h1 class="hero-greeting">${greeting()}, Steven.</h1><p class="room-hint">Drag to look around. Tap a door to go in.</p></section>`;
   return `${hero}
+  <div class="room-sheet">
+  ${doorList()}
   <div class="home-search">${searchBox('Search recipes, workouts, notes…')}</div>
   ${!sync.available || sync.connected || !sync.hasPasscode ? '' : `<p class="sync-note">${escape(sync.error || 'Syncing…')}</p>`}
   ${q ? resultsList(search(q, items)) : `
@@ -99,7 +100,8 @@ export function homeView() {
     ${shelf('Recipes', recipes.slice(0, 10), '#/recipes', emptyInvite('recipe', 'No recipes yet.'))}
     ${shelf('Workouts', workouts.slice(0, 10), '#/workouts', emptyInvite('workout', 'Save a workout here and it’s ready whenever you are. Paste one from TikTok or Instagram, or write your own.'))}
     ${shelf('Notes', notes.slice(0, 8), '#/notes', emptyInvite('note', 'Keep anything else here: sizes, gear, routines, links.'))}
-  `}`;
+  `}
+  </div>`;
 }
 
 export function searchBox(placeholder) {
@@ -139,8 +141,7 @@ export function listView(type) {
     ? [['fast', '30 min or less'], ['protein', '30 g+ protein']]
     : type === 'workout' ? [['short', '30 min or less'], ['noequip', 'No equipment']] : [];
   const sorts = type === 'recipe' ? [['new', 'Newest'], ['quick', 'Quickest'], ['protein', 'Most protein'], ['cost', 'Lowest cost'], ['cuisine', 'Cuisine'], ['az', 'A to Z']] : [['new', 'Newest'], ['az', 'A to Z'], ...(type === 'workout' ? [['quick', 'Shortest']] : [])];
-  return `<div class="scene3d scene-banner" data-3d="${key}" aria-hidden="true"></div>
-    <section class="page-head">
+  return `<section class="page-head">
       <h1>${sec.name}</h1>
       <div class="page-actions">
         ${type !== 'note' ? `<button class="btn btn-soft btn-small" data-action="pick" data-type="${type}" ${items.length ? '' : 'disabled'}>${icon('shuffle')}Pick one</button>` : ''}
@@ -229,4 +230,26 @@ export function itemView(id) {
       ${isEditedBuiltIn(item.id) ? `<p class="fine">You edited this cookbook entry. <button class="link-btn" data-action="revert" data-id="${escape(item.id)}">Restore the original</button></p>` : ''}
     </div>
   </article>`;
+}
+
+// ---------- the house ----------
+export const DOORS = [
+  ['#/recipes', 'Kitchen', 'Recipes', 'bowl'],
+  ['#/workouts', 'Gym', 'Workouts', 'dumbbell'],
+  ['#/library', 'Library', 'Journal', 'book'],
+  ['#/office', 'Office', 'To-do & Notes', 'checkbox'],
+];
+export function doorList() {
+  return `<nav class="door-list" aria-label="Rooms">${DOORS.map(([href, room, sub, ic]) => `<a class="door-chip" href="${href}">${icon(ic)}<span><strong>${room}</strong><small>${sub}</small></span></a>`).join('')}</nav>`;
+}
+
+export function officeView() {
+  const tasks = byType('task');
+  const open = tasks.filter(t => !t.done).length;
+  const notes = byType('note').length;
+  return `<section class="page-head"><div><h1>Office</h1><p class="page-sub">Tap the clipboard for your to-dos, or the corkboard for notes.</p></div></section>
+    <div class="office-picks">
+      <a class="office-pick" href="#/todo">${icon('checkbox')}<span><strong>To-do</strong><small>${open ? plural(open, 'thing') + ' left' : 'All clear'}</small></span></a>
+      <a class="office-pick" href="#/notes">${icon('leaf')}<span><strong>Notes</strong><small>${plural(notes, 'note')}</small></span></a>
+    </div>`;
 }

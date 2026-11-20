@@ -43,9 +43,7 @@ export function todoView() {
   const open = visible.length - groups.done.length;
   const dueNow = groups.overdue.length + groups.today.length;
   const sub = !all.length ? '' : open === 0 ? 'All done.' : `${plural(open, 'thing')} left${dueNow ? `, ${dueNow} due today${groups.overdue.length ? ` (${groups.overdue.length} overdue)` : ''}` : ''}.`;
-  const doneToday = all.filter(t => t.done && t.doneAt && new Date(t.doneAt).toDateString() === new Date().toDateString()).length;
-  return `<div class="scene3d scene-banner scene-jar" data-3d="todo" data-count="${doneToday}" aria-hidden="true"><span class="jar-caption">${doneToday ? `${plural(doneToday, 'firefly', 'fireflies')} caught today` : 'Finish a task to catch a firefly'}</span></div>
-    <section class="page-head"><div><h1>To-do</h1>${sub ? `<p class="page-sub">${escape(sub)}</p>` : ''}</div>
+  return `<section class="page-head"><div><h1>To-do</h1>${sub ? `<p class="page-sub">${escape(sub)}</p>` : ''}</div>
       <a class="btn btn-ghost btn-small" href="#/new/task">${icon('edit')}With details</a></section>
     <form class="quick-task" data-form="quick-task" autocomplete="off">
       <label class="sr-only" for="quick-task">Add a to-do</label>

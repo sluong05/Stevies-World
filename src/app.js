@@ -2,7 +2,7 @@ import { watchAppUpdates } from './updates.js';
 import { $, $$, toast } from './ui.js';
 import * as store from './store.js';
 import { applyTheme, setTheme, setAutoNight } from './theme.js';
-import { homeView, listView, itemView, ui } from './views.js';
+import { homeView, listView, itemView, officeView, ui } from './views.js';
 import { editing, addView, editorView, startNew, startEdit, draftFromText, importFromLink, firstUrl, readForm, switchType, updatePreview, setPhoto, saveDraft, removeItem } from './editor.js';
 import { mode, modeView, enterMode, exitMode, startTimer, stopTimer } from './modes.js';
 import { settingsView } from './settings.js';
@@ -37,7 +37,7 @@ function render({ keepScroll = false } = {}) {
     if (main.dataset.view === 'library' && libraryMod?.mounted()) { libraryMod.route(b || ''); return; }
     main.innerHTML = '<section class="library" id="library"><p class="lib-loading">Lighting the lamps…</p></section>';
     main.dataset.view = 'library';
-    scenesMod?.sync(null);
+    worldMod?.show(null); setRoom(null);
     window.scrollTo({ top: 0, behavior: 'instant' });
     import('./library.js').then(m => { libraryMod = m; if (parseRoute().parts[0] === 'library') m.mount($('#library'), parseRoute().parts[1] || ''); });
     return;
@@ -47,6 +47,7 @@ function render({ keepScroll = false } = {}) {
   else if (a === 'workouts') { html = listView('workout'); tab = 'workouts'; }
   else if (a === 'notes') { html = listView('note'); tab = 'notes'; }
   else if (a === 'todo') { html = todoView(); tab = 'todo'; }
+  else if (a === 'office') { html = officeView(); tab = 'office'; }
   else if (a === 'item' && b && (c === 'cook' || c === 'go')) { enterMode(c === 'cook' ? 'cook' : 'workout', b); html = modeView(); }
   else if (a === 'item' && b && store.getItem(b)?.type === 'journal') { location.replace(`#/library/${store.getItem(b).date}`); return; }
   else if (a === 'item' && b) { html = itemView(b); tab = { recipe: 'recipes', workout: 'workouts', note: 'notes', task: 'todo' }[store.getItem(b)?.type] || ''; }
@@ -59,6 +60,9 @@ function render({ keepScroll = false } = {}) {
 
   const focused = ['search', 'quick-task'].includes(document.activeElement?.id) ? document.activeElement : null;
   const caret = focused?.selectionStart;
+  const room = ROOM_OF[a || ''] || null;
+  const theme = document.documentElement.dataset.theme;
+  if (room && room !== 'living' && theme !== 'plain') html = `<div class="room-stage room-stage-short" aria-hidden="true"></div><div class="room-sheet">${html}</div>`;
   main.innerHTML = html;
   main.dataset.view = a || 'home';
   $$('[data-tab]').forEach(el => (el.dataset.tab === tab ? el.setAttribute('aria-current', 'page') : el.removeAttribute('aria-current')));
@@ -68,18 +72,22 @@ function render({ keepScroll = false } = {}) {
     if (!keepScroll) window.scrollTo({ top: 0, behavior: 'instant' });
   }
   lastRoute = routeKey;
-  sync3d();
+  setRoom(room);
 }
 
-// Small three.js scenes (see scenes3d.js) load after the page has painted.
-let scenesMod = null;
-function sync3d() {
+// The house (see world3d.js): each section is a room, loaded after the page has painted.
+const ROOM_OF = { '': 'living', recipes: 'kitchen', workouts: 'gym', office: 'office', todo: 'office', notes: 'office' };
+const ROOM_LABEL = { living: 'Living room', kitchen: 'Kitchen', gym: 'Gym', office: 'Office' };
+let worldMod = null;
+function setRoom(room) {
   const theme = document.documentElement.dataset.theme;
-  const wants = theme !== 'plain' && main.querySelector('[data-3d]');
-  if (scenesMod) { scenesMod.sync(main, theme); return; }
-  if (!wants) return;
-  const go = () => import('./scenes3d.js').then(m => { scenesMod = m; m.sync(main, document.documentElement.dataset.theme); }).catch(() => {});
-  (window.requestIdleCallback || (f => setTimeout(f, 200)))(go);
+  document.body.dataset.room = room && theme !== 'plain' ? room : '';
+  const label = $('#room-name');
+  if (label) label.textContent = room && room !== 'living' ? ROOM_LABEL[room] : '';
+  if (worldMod) { worldMod.show(room, theme); return; }
+  if (!room || theme === 'plain') return;
+  const go = () => import('./world3d.js').then(m => { worldMod = m; const r = ROOM_OF[parseRoute().parts[0] || ''] || null; m.show(r, document.documentElement.dataset.theme); }).catch(() => {});
+  (window.requestIdleCallback || (f => setTimeout(f, 120)))(go, { timeout: 600 });
 }
 
 store.onChange(() => {
