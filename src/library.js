@@ -77,7 +77,7 @@ export function mount(root, date) {
   on(S.pages, 'input', onPageInput);
   on(S.pages, 'change', onPageInput);
   document.body.classList.add('in-library');
-  try { buildScene(); }
+  try { buildScene(); root.classList.add('lib-3d'); }
   catch (error) { console.warn('Library 3D unavailable', error); S.flat = true; buildFlat(); }
   updateHud();
   if (isDate(date)) route(date); else focusMonth(S.bays.length - 1, true);
@@ -204,7 +204,7 @@ function paintSpine(b) {
 // ---------- scene ----------
 function buildScene() {
   const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'low-power' });
-  renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.5));
   renderer.outputColorSpace = THREE.SRGBColorSpace;
   renderer.toneMapping = THREE.ACESFilmicToneMapping;
   renderer.toneMappingExposure = 1.15;
@@ -218,17 +218,20 @@ function buildScene() {
   Object.assign(S, { renderer, scene, camera, clock: new THREE.Clock(), camX: 0, camTarget: 0, vel: 0 });
 
   // Light: a warm lamp that travels with you, a flickering hearth glow, and soft fill.
-  scene.add(new THREE.HemisphereLight('#ffd9a8', '#2a1a10', 0.55));
-  const lamp = new THREE.SpotLight('#ffcf8a', 7, 4, Math.PI / 4.2, 0.65, 1.4);
+  scene.add(new THREE.HemisphereLight('#ffd9a8', '#2a1a10', 0.8));
+  const lamp = new THREE.SpotLight('#ffcf8a', 8, 4.5, Math.PI / 3.3, 0.7, 1.3);
   lamp.position.set(0, 2.2, 1.3);
   lamp.castShadow = true;
-  lamp.shadow.mapSize.set(1024, 1024);
+  lamp.shadow.mapSize.set(512, 512);
   lamp.shadow.bias = -0.0015;
   scene.add(lamp, lamp.target);
   const hearth = new THREE.PointLight('#ff8a3d', 1.6, 3.2, 1.6);
   hearth.position.set(-0.7, FLOOR_Y + 0.25, 1.1);
   scene.add(hearth);
-  Object.assign(S, { lamp, hearth });
+  const fill = new THREE.PointLight('#ffb070', 1.1, 3, 1.5);
+  fill.position.set(0, FLOOR_Y + 0.5, 1.4);
+  scene.add(fill);
+  Object.assign(S, { lamp, hearth, fill });
 
   const list = months();
   const span = list.length * BAY_STEP;
@@ -297,7 +300,8 @@ function buildScene() {
     b.spineTex = new THREE.CanvasTexture(c); b.spineTex.colorSpace = THREE.SRGBColorSpace; b.spineTex.anisotropy = 4;
     paintSpine(b);
     const coverMat = new THREE.MeshStandardMaterial({ color, roughness: 0.7 });
-    const spineMat = new THREE.MeshStandardMaterial({ map: b.spineTex, roughness: 0.6 });
+    const spineMat = new THREE.MeshStandardMaterial({ map: b.spineTex, roughness: 0.6, emissive: new THREE.Color('#e9a84a'), emissiveIntensity: 0 });
+    b.glowMats = [spineMat];
     const firstPage = canvasTex(256, 340, (g, Wc, Hc) => {
       g.fillStyle = '#f3e9cf'; g.fillRect(0, 0, Wc, Hc);
       g.strokeStyle = 'rgba(90, 120, 160, .35)'; g.lineWidth = 1.5;
@@ -328,6 +332,7 @@ function buildScene() {
       ribbon.position.set(-W / 2 + 0.05, H / 2 + 0.02, 0); // bookmark peeking out of the top
       ribbon.rotation.y = Math.PI / 2;
       group.add(ribbon);
+      b.ribbon = ribbon;
     }
     const lean = slot === PER_SHELF - 1 && r() < 0.3 ? 0.06 : 0;
     const slotW = (BAY_W - 0.04) / PER_SHELF;
@@ -341,6 +346,8 @@ function buildScene() {
     return b;
   };
   S.bays.forEach(month => month.days.forEach((date, i) => S.makeBook(date, month, i)));
+  if (!S.books.has(today)) addGhost();
+  addDecor(add, caseMat, list.length, totalH);
 
   // Dust drifting through the lamplight.
   const N = 160, pos = new Float32Array(N * 3), rd = rand('dust');
@@ -351,6 +358,7 @@ function buildScene() {
   scene.add(S.dust);
 
   S.pickables = [...S.books.values()].map(b => b.group.children[0]);
+  if (S.tag) S.pickables.push(S.tag);
   S.month = monthOf;
   makePages();
   S.minX = S.bayX(0); S.maxX = S.bayX(S.bays.length - 1);
@@ -361,6 +369,61 @@ function buildScene() {
   bindPointer();
   S.on(document, 'visibilitychange', () => { if (!document.hidden) loop(); });
   loop();
+}
+
+// Today's book, waiting on the shelf with a soft glow and a paper tag until you write in it.
+function addGhost() {
+  const today = todayISO();
+  const bay = S.bays[S.bays.length - 1];
+  const b = S.makeBook(today, bay, bay.days.length);
+  b.temp = true;
+  S.ghost = b;
+  const tex = canvasTex(320, 160, (g, W, H) => {
+    g.fillStyle = '#f3e6c4'; g.beginPath(); g.moveTo(24, 0); g.lineTo(W, 0); g.lineTo(W, H); g.lineTo(24, H); g.lineTo(0, H / 2); g.closePath(); g.fill();
+    g.fillStyle = '#7a3b1e'; g.beginPath(); g.arc(22, H / 2, 7, 0, Math.PI * 2); g.fill();
+    g.fillStyle = '#3a2610'; g.textAlign = 'center'; g.textBaseline = 'middle';
+    g.font = `600 52px ${HAND}`; g.fillText(writtenDates().length ? 'Today' : 'Start', W / 2 + 14, H * 0.36);
+    g.font = `italic 36px Georgia, serif`; g.fillText('tap to write', W / 2 + 14, H * 0.7);
+  });
+  const tag = new THREE.Mesh(new THREE.PlaneGeometry(0.15, 0.075), new THREE.MeshStandardMaterial({ map: tex, transparent: true, roughness: 0.9, side: THREE.DoubleSide, emissive: new THREE.Color('#5a4630'), emissiveMap: tex }));
+  const p = b.group.position;
+  tag.position.set(p.x + 0.095, p.y + b.H * 0.22, p.z + b.W / 2 + 0.012);
+  tag.userData.date = today;
+  S.scene.add(tag);
+  S.tag = tag;
+}
+
+// Little things that make the room feel lived in: a candle on top of the case and a plant on the floor.
+function addDecor(add, caseMat, bays, totalH) {
+  const top = shelfY(0);
+  const x = S.bayX(bays - 1) + BAY_W / 2 - 0.08;
+  const wax = new THREE.MeshStandardMaterial({ color: '#efe2c4', roughness: 0.6 });
+  const brass = new THREE.MeshStandardMaterial({ color: '#c79a4a', metalness: 0.7, roughness: 0.35 });
+  add(new THREE.CylinderGeometry(0.04, 0.045, 0.012, 20), brass, x, top + 0.006, 0.02);
+  add(new THREE.CylinderGeometry(0.018, 0.018, 0.09, 16), wax, x, top + 0.057, 0.02);
+  const flame = new THREE.Mesh(new THREE.SphereGeometry(0.008, 10, 8), new THREE.MeshBasicMaterial({ color: '#ffd27a' }));
+  flame.geometry.translate(0, 0.008, 0); flame.scale.y = 1.8;
+  flame.position.set(x, top + 0.104, 0.02);
+  const glow = new THREE.Sprite(new THREE.SpriteMaterial({ map: canvasTex(64, 64, g => { const gr = g.createRadialGradient(32, 32, 0, 32, 32, 32); gr.addColorStop(0, 'rgba(255,200,120,.9)'); gr.addColorStop(1, 'rgba(255,160,80,0)'); g.fillStyle = gr; g.fillRect(0, 0, 64, 64); }), transparent: true, depthWrite: false, blending: THREE.AdditiveBlending }));
+  glow.scale.set(0.14, 0.14, 1); glow.position.set(x, top + 0.115, 0.02);
+  const light = new THREE.PointLight('#ffb35c', 0.9, 1.6, 1.6);
+  light.position.set(x, top + 0.14, 0.12);
+  S.scene.add(flame, glow, light);
+  S.candle = { flame, light };
+  // potted plant beside the case
+  const px = S.bayX(0) - BAY_STEP / 2 - 0.16;
+  const pot = new THREE.MeshStandardMaterial({ color: '#9a4f32', roughness: 0.8 });
+  add(new THREE.CylinderGeometry(0.075, 0.06, 0.14, 20), pot, px, FLOOR_Y + 0.07, 0.1);
+  const leafMat = new THREE.MeshStandardMaterial({ color: '#4f7a3a', roughness: 0.7, side: THREE.DoubleSide });
+  const r = rand('plant');
+  for (let i = 0; i < 9; i++) {
+    const leaf = new THREE.Mesh(new THREE.PlaneGeometry(0.05, 0.22), leafMat);
+    leaf.geometry.translate(0, 0.11, 0);
+    leaf.position.set(px, FLOOR_Y + 0.13, 0.1);
+    leaf.rotation.set(0.25 + r() * 0.5, (i / 9) * Math.PI * 2, 0, 'YXZ');
+    leaf.castShadow = true;
+    S.scene.add(leaf);
+  }
 }
 
 function monthOf(date) {
@@ -419,6 +482,9 @@ function bindPointer() {
     else snapToBay();
   };
   S.on(el, 'pointerup', up);
+  // On phones a tap also fires a compatibility mousedown on the canvas, which would steal focus back
+  // from the hidden textarea we just focused, so the keyboard never stayed up.
+  S.on(el, 'mousedown', e => { if (S.open) e.preventDefault(); });
   S.on(el, 'pointercancel', () => { down = null; });
   S.on(el, 'wheel', e => { if (S.open) return; e.preventDefault(); S.camTarget = clampX(S.camTarget + (e.deltaX || e.deltaY) * worldPerPixel()); clearTimeout(S.wheelT); S.wheelT = setTimeout(snapToBay, 220); }, { passive: false });
   S.on(window, 'keydown', e => {
@@ -457,7 +523,7 @@ function pick(e) {
   pointer.set(((e.clientX - r.left) / r.width) * 2 - 1, -((e.clientY - r.top) / r.height) * 2 + 1);
   ray.setFromCamera(pointer, S.camera);
   const hit = ray.intersectObjects(S.pickables, false)[0];
-  return hit ? S.books.get(hit.object.userData.date) : null;
+  return hit ? S.books.get(hit.object.userData.date) || null : null;
 }
 function hover(e) {
   if (S.open || S.busy || e.pointerType !== 'mouse') return;
@@ -568,7 +634,18 @@ export function layout(g, text, maxW) {
   return lines;
 }
 
+const paperCache = new Map();
 export function paper(g, gutterLeft) {
+  const key = String(Boolean(gutterLeft));
+  let c = paperCache.get(key);
+  if (!c) {
+    c = document.createElement('canvas'); c.width = PAGE_W; c.height = PAGE_H;
+    paintPaper(c.getContext('2d'), gutterLeft);
+    paperCache.set(key, c);
+  }
+  g.drawImage(c, 0, 0);
+}
+function paintPaper(g, gutterLeft) {
   const grad = g.createLinearGradient(0, 0, PAGE_W, 0);
   const a = '#e6d5ae', b = '#f6ecd4';
   if (gutterLeft) { grad.addColorStop(0, a); grad.addColorStop(0.12, b); grad.addColorStop(1, '#f1e4c6'); }
@@ -595,10 +672,12 @@ function writeBlock(g, { text, placeholder, x, y0, y1, w, focused, caretAt }) {
   const fit = Math.max(1, Math.floor((y1 - y0) / LH));
   let caretLine = lines.length - 1;
   if (caretAt !== undefined) for (let i = 0; i < lines.length; i++) if (lines[i].start <= caretAt) caretLine = i;
-  const first = Math.max(0, Math.min(lines.length - fit, caretLine - fit + 1));
+  const first = focused ? Math.max(0, Math.min(lines.length - fit, caretLine - fit + 1)) : 0;
   g.fillStyle = INK;
   lines.slice(first, first + fit).forEach((l, i) => g.fillText(l.text, x + 4, y0 + LH * (i + 1)));
   if (first > 0) { g.fillStyle = FADED; g.font = `italic 22px ${HAND}`; g.fillText('…', x + w - 20, y0 + 16); }
+  if (!focused && lines.length > fit) { g.fillStyle = FADED; g.font = `italic 22px ${HAND}`; g.textAlign = 'right'; g.fillText(`… ${lines.length - fit} more line${lines.length - fit === 1 ? '' : 's'}, tap to read`, x + w, y1 + 26); g.textAlign = 'left'; }
+  g.font = `32px ${HAND}`;
   if (focused && S.caretOn) {
     const l = lines[caretLine] || { text: '', start: 0 };
     g.font = `32px ${HAND}`;
@@ -609,6 +688,11 @@ function writeBlock(g, { text, placeholder, x, y0, y1, w, focused, caretAt }) {
 }
 
 function drawPages() {
+  if (!S || S.drawQueued) return;
+  S.drawQueued = true;
+  requestAnimationFrame(() => { if (!S) return; S.drawQueued = false; paintPages(); });
+}
+function paintPages() {
   if (!S?.open || !S.leftPage) return;
   const date = S.open.date;
   const body = S.pages.querySelector('[name="body"]'), next = S.pages.querySelector('[name="nextWorkout"]'), sel = S.pages.querySelector('[name="workoutId"]');
@@ -696,12 +780,15 @@ async function openBook(date) {
     b.temp = true;
     S.pickables.push(b.group.children[0]);
   }
+  for (const m of b.glowMats || []) m.emissiveIntensity = 0;
   if (!b) { showFlatPages(date); return; }
   S.busy = true;
   const bayI = Math.max(0, monthOf(date));
   if (bayI !== S.bayIndex || Math.abs(S.camX - S.bays[bayI].x) > 0.01) { focusMonth(bayI); await tween(450, () => {}); }
   S.open.book = b;
   b.peek = 0;
+  if (b.ribbon) b.ribbon.visible = false;
+  if (S.tag) S.tag.visible = false;
   showInk(date);
   attachPages(b);
   drawPages();
@@ -744,12 +831,9 @@ async function closeBook(fast = false) {
   await tween(380 * k, t => { b.group.position.lerpVectors(out, b.home.pos, t); b.group.rotation.z = b.home.rot.z * t; });
   if (!S) return;
   S.busy = false;
-  if (b.temp && !hasWriting(entry(b.date))) {
-    await tween(300, t => { b.group.scale.setScalar(1 - t * 0.999); });
-    S.scene.remove(b.group);
-    S.books.delete(b.date);
-    S.pickables = S.pickables.filter(m => m !== b.group.children[0]);
-  } else if (b.temp) { b.temp = false; S.bays[monthOf(b.date)]?.days.push(b.date); }
+  if (b.ribbon) b.ribbon.visible = true;
+  if (b.temp && !hasWriting(entry(b.date))) { if (S.tag) S.tag.visible = true; }
+  else if (b.temp) { b.temp = false; S.ghost = null; if (S.tag) { S.scene.remove(S.tag); S.pickables = S.pickables.filter(m => m !== S.tag); S.tag = null; } S.bays[monthOf(b.date)]?.days.push(b.date); }
   if (shelvesChanged()) rebuild();
 }
 
@@ -757,7 +841,14 @@ function loop() {
   if (!S?.renderer || document.hidden) return;
   cancelAnimationFrame(S.raf);
   S.raf = requestAnimationFrame(loop);
+  // When nothing is moving, only the dust and firelight drift: draw every third frame to save battery.
+  const idle = !S.open && !S.busy && !S.hovered && Math.abs(S.vel) < 0.0001 && Math.abs(S.camTarget - S.camX) < 0.0005;
+  S.frame = (S.frame || 0) + 1;
+  if (idle && S.frame % 3) return;
   const t = S.clock.getElapsedTime();
+  if (S.ghost && !S.open) for (const m of S.ghost.glowMats) m.emissiveIntensity = 0.25 + 0.2 * Math.sin(t * 2.4);
+  if (S.tag) S.tag.rotation.z = Math.sin(t * 1.3) * 0.05;
+  if (S.candle) { const f = 0.85 + Math.sin(t * 9.1) * 0.08 + Math.sin(t * 15.7) * 0.05; S.candle.light.intensity = 0.9 * f; S.candle.flame.scale.set(1, f, 1); }
   if (!S.open && !S.busy && Math.abs(S.vel) > 0.0001) { S.camTarget = clampX(S.camTarget + S.vel); S.vel *= 0.9; }
   S.camX += (S.camTarget - S.camX) * (S.reduced ? 1 : 0.14);
   const cam = S.camera;
@@ -768,6 +859,7 @@ function loop() {
   }
   S.lamp.position.x = S.camX + 0.25; S.lamp.target.position.set(S.camX, midY - 0.1, 0);
   S.hearth.position.x = S.camX - 0.8;
+  S.fill.position.x = S.camX;
   S.hearth.intensity = 1.4 + Math.sin(t * 7.3) * 0.18 + Math.sin(t * 13.1) * 0.1 + Math.sin(t * 2.1) * 0.12;
   for (const b of S.books.values()) {
     if (S.open?.book === b) continue;
@@ -803,8 +895,8 @@ function showInk(date) {
     <textarea class="lib-hidden-input" name="nextWorkout" aria-label="Next time at the gym" autocapitalize="sentences">${escape(e.nextWorkout || '')}</textarea>
     <div class="lib-tools" role="toolbar" aria-label="${escape(longDate(date))}">
       <button class="lib-chip" data-lib="day" data-date="${before}" aria-label="Earlier entry" ${before ? '' : 'disabled'}>${icon('back')}</button>
-      <button class="lib-chip lib-side" data-lib="side" data-side="body">Thoughts</button>
-      <button class="lib-chip lib-side" data-lib="side" data-side="nextWorkout">${icon('dumbbell')}Gym</button>
+      <button class="lib-chip lib-side" data-lib="side" data-side="body" aria-label="Thoughts">${icon('edit')}<span>Thoughts</span></button>
+      <button class="lib-chip lib-side" data-lib="side" data-side="nextWorkout" aria-label="Next time at the gym">${icon('dumbbell')}<span>Gym</span></button>
       <label class="lib-chip lib-pick">${icon('list')}<span class="sr-only">Saved workout</span><select name="workoutId">
         <option value="">Workout</option>
         ${workouts.map(w => `<option value="${escape(w.id)}" ${w.id === e.workoutId ? 'selected' : ''}>${escape(w.title)}</option>`).join('')}
@@ -817,7 +909,7 @@ function showInk(date) {
   const redraw = () => drawPages();
   for (const ta of S.pages.querySelectorAll('textarea')) {
     ta.addEventListener('focus', () => { S.caretOn = true; markSide(ta.name); redraw(); });
-    ta.addEventListener('blur', () => { setTimeout(() => { if (S && !S.pages.contains(document.activeElement)) { markSide(null); if (narrow()) { S.open && (S.open.side = S.open.side); } } redraw(); }, 0); });
+    ta.addEventListener('blur', () => { setTimeout(() => { if (S && !S.pages.contains(document.activeElement)) markSide(null); redraw(); }, 0); });
     ta.addEventListener('keyup', redraw);
     ta.addEventListener('select', redraw);
   }

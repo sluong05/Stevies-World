@@ -727,12 +727,16 @@ body.lib-reading .lib-hud * { pointer-events: none; }
 .lib-pick select { appearance: none; -webkit-appearance: none; border: 0; background: transparent; color: inherit; font: inherit; max-width: 8.5em; text-overflow: ellipsis; cursor: pointer; }
 .lib-shelf span { display: inline; }
 @media (max-width: 380px) { .lib-shelf span { display: none; } }
+/* In 3D the plaque names the month and today's book waits on the shelf with a tag, so the flat hint, label and button step aside */
+.lib-3d .lib-hint, .lib-3d .lib-month, .lib-3d .lib-today { display: none; }
+.lib-3d .lib-hud { background: none; }
 body.lib-reading .lib-dim.on { opacity: .55; }
 @media (max-width: 480px) {
   .lib-tools { gap: 4px; padding: 4px; }
   .lib-tools .lib-chip { height: 36px; min-width: 36px; padding: 0 9px; font-size: 13px; gap: 4px; }
-  .lib-tools .lib-pick .icon, .lib-tools .lib-side .icon { display: none; }
-  .lib-pick select { max-width: 5.2em; }
+  .lib-tools .lib-chip { height: 40px; min-width: 40px; }
+  .lib-tools .lib-side span, .lib-tools .lib-pick .icon { display: none; }
+  .lib-pick select { max-width: 6em; }
   .lib-shelf span { display: none; }
 }
 
