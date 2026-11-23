@@ -1423,7 +1423,12 @@ function ensure() {
     el.addEventListener('blur', () => { for (const p of Object.values(room?.panels || {})) p.dirty = true; });
   }
   renderer.domElement.addEventListener('webglcontextlost', e => { e.preventDefault(); failed = true; stop(); document.body.classList.remove('world-live'); document.body.classList.add('world-failed'); });
-  addEventListener('resize', () => { resize(); wake(); });
+  // Re-frame whenever the viewport changes size, including rotation and the phone's toolbars.
+  const onResize = () => { resize(); wake(); };
+  addEventListener('resize', onResize);
+  addEventListener('orientationchange', () => { onResize(); setTimeout(onResize, 250); });
+  window.visualViewport?.addEventListener('resize', onResize);
+  if (typeof ResizeObserver === 'function') new ResizeObserver(onResize).observe(host);
   addEventListener('scroll', onScroll, { passive: true });
   document.addEventListener('visibilitychange', wake);
   // Drag over the stage to look around (or scroll a screen when zoomed in); tap to use things.
