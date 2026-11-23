@@ -1,3 +1,11 @@
+/* Kiwi Maru draws letters with macrons (ō, ū: "Zōsui", "Chūka") as a letter plus a loose bar.
+   This family covers only accented Latin letters, from a serif already on the device, and is
+   listed before Kiwi Maru so those letters come from it and everything else stays Kiwi Maru. */
+@font-face {
+  font-family: 'SW Macrons';
+  src: local('Georgia'), local('Times New Roman'), local('TimesNewRomanPSMT'), local('Noto Serif'), local('NotoSerif'), local('Droid Serif'), local('Liberation Serif'), local('DejaVu Serif');
+  unicode-range: U+0100-024F, U+1E00-1EFF;
+}
 /* Stevies World — themes are sets of custom properties on [data-theme]. */
 
 /* ---------- Meadow (default): painted sky, hills, warm paper ---------- */
@@ -5,7 +13,7 @@
   --bg: #f3f1df; --bar: #f3f1df; --card: #fffdf3; --ink: #2c3a2b; --ink-soft: #5e6c57; --on-bg: var(--ink);
   --line: rgba(44, 58, 43, .15); --accent: #3f6e3c; --accent-ink: #fffdf3; --accent-soft: #e1ead0; --soft-btn: #e8e5c9;
   --sun: #f4c64f; --roof: #c4513f; --roof-soft: #f6dcd3; --focus: #2f6fb5;
-  --font-head: 'Kiwi Maru', 'Hiragino Mincho ProN', 'Yu Mincho', Georgia, serif;
+  --font-head: 'SW Macrons', 'Kiwi Maru', 'Hiragino Mincho ProN', 'Yu Mincho', Georgia, serif;
   --font-body: 'Zen Maru Gothic', 'Hiragino Maru Gothic ProN', ui-rounded, system-ui, sans-serif;
   --radius: 20px; --radius-sm: 12px; --pill: 999px;
   --shadow: 0 1px 0 rgba(255, 255, 255, .7) inset, 0 12px 26px -16px rgba(50, 70, 36, .5), 0 2px 6px -3px rgba(50, 70, 36, .18);
@@ -686,7 +694,7 @@ body.lib-reading .lib-hud * { pointer-events: none; }
 .lib-label { display: flex; align-items: center; gap: 6px; font: 600 13px var(--font-body); letter-spacing: .06em; text-transform: uppercase; color: #8a5a2e; margin-top: 4px; }
 .lib-label .icon { width: 18px; height: 18px; }
 .lib-lines { flex: 1; width: 100%; min-height: 220px; resize: none; border: 0; outline: none; padding: 0 2px; color: #2e1e10; background-color: transparent;
-  font: 18px/30px 'Kiwi Maru', Georgia, serif; background-image: repeating-linear-gradient(to bottom, transparent 0 29px, rgba(90, 120, 160, .3) 29px 30px); background-attachment: local; }
+  font: 18px/30px 'SW Macrons', 'Kiwi Maru', Georgia, serif; background-image: repeating-linear-gradient(to bottom, transparent 0 29px, rgba(90, 120, 160, .3) 29px 30px); background-attachment: local; }
 .lib-short { flex: 0 0 auto; min-height: 150px; }
 .lib-lines::placeholder { color: #a08a6a; font-style: italic; }
 .lib-lines:focus-visible { box-shadow: 0 0 0 2px rgba(138, 90, 46, .35); border-radius: 4px; }

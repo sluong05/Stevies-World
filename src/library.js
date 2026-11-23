@@ -569,7 +569,7 @@ function tween(ms, step) {
 // the page as you type, so the letters bend with the paper.
 export const PAGE_W = 768, PAGE_H = 1024;
 export const INK = '#2e1e10', FADED = 'rgba(74, 48, 32, .45)', RULE = 'rgba(90, 120, 160, .32)', LABEL = '#8a5a2e';
-export const HAND = '"Kiwi Maru", Georgia, serif';
+export const HAND = '"SW Macrons", "Kiwi Maru", Georgia, serif';
 
 export function curvedPage(gutterAtLeft) {
   // A 1×1 sheet that rises out of the gutter and settles toward the outer edge.

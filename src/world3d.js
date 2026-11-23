@@ -122,7 +122,7 @@ function plaque(label, sub, w = 0.9, h = 0.34, { bg = '#f6e7c4', ink = '#4a3220'
     g.fillStyle = edge; g.fillRect(0, 0, W, H);
     g.fillStyle = bg; g.fillRect(8, 8, W - 16, H - 16);
     g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillStyle = ink;
-    g.font = `600 ${Math.round(H * (sub ? 0.42 : 0.55))}px "Kiwi Maru", Georgia, serif`;
+    g.font = `600 ${Math.round(H * (sub ? 0.42 : 0.55))}px "SW Macrons", "Kiwi Maru", Georgia, serif`;
     g.fillText(label, W / 2, sub ? H * 0.4 : H / 2);
     if (sub) { g.fillStyle = soft; g.font = `${Math.round(H * 0.26)}px "Zen Maru Gothic", system-ui, sans-serif`; g.fillText(sub, W / 2, H * 0.77); }
   };
@@ -536,7 +536,7 @@ function ellipsis(g, text, maxW) {
 }
 const plainText = s => String(s || '').replace(/^#+\s*/gm, '').replace(/[*_`>]/g, '').replace(/^\s*[-•]\s+/gm, '• ').replace(/\[([^\]]+)\]\([^)]*\)/g, '$1');
 const FONT = '"Zen Maru Gothic", "Atkinson Hyperlegible", system-ui, sans-serif';
-const HEAD = '"Kiwi Maru", Georgia, serif';
+const HEAD = '"SW Macrons", "Kiwi Maru", Georgia, serif';
 
 // The desk monitor: the To-do app on a tall screen.
 const todoState = { filter: 'All' };
