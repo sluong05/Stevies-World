@@ -919,7 +919,7 @@ function drawSettings(p, night) {
   g.fillStyle = an ? green : '#cbb894'; rr(g, 30, y, 74, 40, 20); g.fill();
   g.fillStyle = '#fff'; g.beginPath(); g.arc(an ? 84 : 50, y + 20, 15, 0, 7); g.fill();
   g.fillStyle = ink; g.font = `400 23px ${FONT}`; g.textBaseline = 'middle';
-  wrap(g, 'Firefly night when my phone is in dark mode', W - 150, 2).forEach((l, i) => g.fillText(l, 120, y + 12 + i * 28));
+  wrap(g, 'Firefly night after dark (8 PM to 5 AM)', W - 150, 2).forEach((l, i) => g.fillText(l, 120, y + 12 + i * 28));
   p.hits.push({ x: 24, y: y - 6, w: W - 48, h: 60, fn: () => press('[data-action="auto-night"]') });
   const sh = startHome();
   y += 64;

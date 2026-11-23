@@ -51,7 +51,7 @@ export function settingsView() {
         <span class="theme-blurb">${escape(t.blurb)}</span>
       </button>`).join('')}
     </div>
-    <label class="toggle"><input type="checkbox" data-action="auto-night" ${autoNight() ? 'checked' : ''}/><span>Switch Meadow to Firefly night when my phone is in dark mode</span></label>
+    <label class="toggle"><input type="checkbox" data-action="auto-night" ${autoNight() ? 'checked' : ''}/><span>Switch Meadow to Firefly night after dark (8 PM to 5 AM)</span></label>
     <label class="toggle"><input type="checkbox" data-action="start-home" ${startHome() ? 'checked' : ''}/><span>Start on the home screen instead of the living room</span></label>
   </section>
   ${syncSection()}

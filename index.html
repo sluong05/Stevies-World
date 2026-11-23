@@ -19,7 +19,8 @@
     // Apply the saved theme before first paint so there's no flash.
     try {
       var t = localStorage.getItem('sw.theme') || 'meadow';
-      if (t === 'meadow' && localStorage.getItem('sw.autoNight') !== '0' && matchMedia('(prefers-color-scheme: dark)').matches) t = 'night';
+      var h = new Date().getHours();
+      if (t === 'meadow' && localStorage.getItem('sw.autoNight') !== '0' && (h >= 20 || h < 5)) t = 'night';
       document.documentElement.dataset.theme = t;
     } catch (e) {}
   </script>
