@@ -3,6 +3,7 @@
 // own bookcase. Tap a cookbook and it slides off the shelf and opens like a Library book:
 // the recipes are drawn right on the curved 3D pages, and you flip through them.
 import * as THREE from '../vendor/three.module.min.js';
+import { exitDoor } from './exitdoor.js';
 import { byType, getItem, isSaved, search, toggleSaved } from './store.js';
 import { toast } from './ui.js';
 import { listView } from './views.js';
@@ -155,14 +156,16 @@ function placeCounterTools() {
   const camZ = DEPTH / 2 + S.dist, camY = (shelfY(0) + 0.5 + COUNTER_Y - 0.12) / 2 - 0.03 + 0.12;
   const tanV = Math.tan(THREE.MathUtils.degToRad(cam.fov / 2)), tilt = 0.12 / camZ;
   const fitDepth = (camY - COUNTER_Y - 0.03) / (tanV + tilt);
-  const zFront = Math.max(Math.min(S.cabFront - 0.13, camZ - fitDepth), S.cabFront - 0.62 + 0.14); // 0.62: worktop depth
+  const zFront = Math.max(Math.min(S.cabFront - 0.06, camZ - fitDepth), S.cabFront - 0.62 + 0.14); // 0.62: worktop depth
   const depth = (camZ - zFront) || 1; // from the shelf view, so zooming in doesn't move them
   const halfW = Math.tan(THREE.MathUtils.degToRad(cam.fov / 2)) * cam.aspect * depth;
   const k = Math.min(1, halfW / 0.42);
   S.chalkGroup.scale.setScalar(k);
-  S.chalkGroup.position.set(S.camX - halfW + 0.2 * k + 0.02, COUNTER_Y + 0.115 * k, zFront);
+  // Hug the screen edges on a phone, but on a wide screen stay beside the shelves instead of drifting off to the far edges.
+  const reach = Math.min(halfW, 0.86);
+  S.chalkGroup.position.set(S.camX - reach + 0.2 * k + 0.03, COUNTER_Y + 0.115 * k, zFront);
   S.boxGroup.scale.setScalar(k);
-  S.boxGroup.position.set(S.camX + halfW - 0.16 * k - 0.02, COUNTER_Y, zFront);
+  S.boxGroup.position.set(S.camX + reach - 0.15 * k - 0.03, COUNTER_Y, zFront - 0.02);
   S.chalkGroup.visible = S.boxGroup.visible = !S.open;
 }
 
@@ -316,6 +319,7 @@ function buildScene() {
   scene.background = new THREE.Color('#3a2a1c');
   scene.fog = new THREE.Fog('#3a2a1c', 2.6, 6.5);
   S.scene = scene;
+  S.exit = exitDoor(); scene.add(S.exit.group);
   S.sig = signature();
   S.dirty = false;
 
@@ -406,7 +410,7 @@ function buildScene() {
     const f = add(new THREE.TorusGeometry(0.06, 0.008, 6, 24), new THREE.MeshBasicMaterial({ color: '#4aa8ff' }), bx, COUNTER_Y + 0.016, bz, false, range);
     f.rotation.x = Math.PI / 2; S.flames.push(f);
   }
-  const pot = add(new THREE.CylinderGeometry(0.11, 0.1, 0.14, 24), std('#9a3b2a', { roughness: 0.35 }), -0.2, COUNTER_Y + 0.09, 0.14, true, range);
+  const pot = add(new THREE.CylinderGeometry(0.11, 0.1, 0.14, 24), std('#9a3b2a', { roughness: 0.35 }), -0.2, COUNTER_Y + 0.09, -0.12, true, range); // back burners, so nothing pokes through the counter tools
   add(new THREE.CylinderGeometry(0.115, 0.115, 0.012, 24), std('#7a2e22'), 0, 0.075, 0, false, pot);
   add(new THREE.CylinderGeometry(0.11, 0.1, 0.06, 24), std('#3a3a3a', { metalness: 0.6 }), 0.2, COUNTER_Y + 0.04, -0.12, true, range);
   const hood = add(new THREE.CylinderGeometry(0.18, STOVE_W / 2, 0.32, 4, 1), std('#c9c2b4', { metalness: 0.5, roughness: 0.35 }), 0, shelfY(0) + 0.05, -0.08, true, range);
@@ -415,7 +419,7 @@ function buildScene() {
   const stoveLight = new THREE.PointLight('#ff9a4d', 1.4, 2.4, 1.6); stoveLight.position.set(sx, COUNTER_Y + 0.25, 0.3); scene.add(stoveLight);
   // steam
   const N = 24, sp = new Float32Array(N * 3), rs = rand('steam');
-  for (let i = 0; i < N; i++) { sp[i * 3] = sx - 0.2 + (rs() - 0.5) * 0.08; sp[i * 3 + 1] = COUNTER_Y + 0.17 + rs() * 0.4; sp[i * 3 + 2] = cabZ + 0.14 + (rs() - 0.5) * 0.08; }
+  for (let i = 0; i < N; i++) { sp[i * 3] = sx - 0.2 + (rs() - 0.5) * 0.08; sp[i * 3 + 1] = COUNTER_Y + 0.17 + rs() * 0.4; sp[i * 3 + 2] = cabZ - 0.12 + (rs() - 0.5) * 0.08; }
   const steamGeo = new THREE.BufferGeometry(); steamGeo.setAttribute('position', new THREE.BufferAttribute(sp, 3));
   const puff = canvasTex(64, 64, g => { const gr = g.createRadialGradient(32, 32, 0, 32, 32, 32); gr.addColorStop(0, 'rgba(255,255,255,.9)'); gr.addColorStop(1, 'rgba(255,255,255,0)'); g.fillStyle = gr; g.fillRect(0, 0, 64, 64); });
   S.steam = new THREE.Points(steamGeo, new THREE.PointsMaterial({ size: 0.07, map: puff, transparent: true, opacity: 0.35, depthWrite: false }));
@@ -446,7 +450,7 @@ function buildScene() {
   add(new THREE.BoxGeometry(0.78, 0.008, 0.01), std('#bdb6a6'), fridgeX + 0.1, FLOOR_Y + 1.05, WALL_Z + 0.715, false);
 
   // Little things on the worktop: a cutting board, jars, a fruit bowl.
-  const cutX = (bays[0].x + (bays[1]?.x ?? bays[0].x + 0.4)) / 2;
+  const cutX = bays[0].x - 0.12; // under the first shelf, clear of the stove
   add(new THREE.BoxGeometry(0.3, 0.02, 0.2), std('#c99a62', { map: woodTex('#c99a62', '#8a6038', 128, 64, 10) }), cutX, COUNTER_Y + 0.01, WALL_Z + 0.22).rotation.y = 0.15;
   const jarMat = std('#e8f0ee', { transparent: true, opacity: 0.55, roughness: 0.1 });
   [['#d8a657', 0.14], ['#8a5a2e', 0.11], ['#b3262a', 0.09]].forEach(([c, h], k) => {
@@ -617,6 +621,11 @@ function bindPointer() {
   });
   S.on(el, 'pointerup', e => {
     if (!down) return;
+    if (!down.moved && Math.hypot(e.clientX - down.x, e.clientY - down.y) < 10) {
+      const r = S.renderer.domElement.getBoundingClientRect();
+      ray.setFromCamera(new THREE.Vector2(((e.clientX - r.left) / r.width) * 2 - 1, -((e.clientY - r.top) / r.height) * 2 + 1), S.camera);
+      if (S.exit?.hit(ray)) { down = null; location.hash = '#/'; return; }
+    }
     const d = down; down = null;
     const dx = e.clientX - d.x, dy = e.clientY - d.y;
     if (S.open) {
@@ -757,6 +766,7 @@ function loop() {
     const want = b.home.pos.z + (b.peek ? 0.035 : 0);
     if (Math.abs(b.group.position.z - want) > 0.0005 && !S.busy) b.group.position.z += (want - b.group.position.z) * 0.2;
   }
+  S.exit?.place(cam);
   S.renderer.render(S.scene, cam);
 }
 
