@@ -29,11 +29,11 @@ export function exitDoor() {
   return {
     group, mesh,
     // Call right before rendering: pins the door to the top-left of what the camera sees.
-    place(cam) {
+    place(cam, inset = 0) { // inset: fraction of the view height covered at the top (by the floating top bar)
       const d = 1, halfH = Math.tan(THREE.MathUtils.degToRad(cam.fov / 2)) * d, halfW = halfH * cam.aspect;
       const h = Math.min(halfH * 0.5, halfW * 0.6), m = Math.min(halfW, halfH) * 0.05;
       mesh.scale.set(h, h, 1);
-      mesh.position.set(-halfW + m + h * 0.32, halfH - m - h / 2, -d);
+      mesh.position.set(-halfW + m + h * 0.32, halfH * (1 - 2 * inset) - m - h / 2, -d);
       group.position.copy(cam.position); group.quaternion.copy(cam.quaternion);
       group.updateMatrixWorld(true);
     },

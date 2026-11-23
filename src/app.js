@@ -5,7 +5,7 @@ import { applyTheme, setTheme, setAutoNight } from './theme.js';
 import { homeView, listView, itemView, officeView, ui } from './views.js';
 import { editing, addView, editorView, startNew, startEdit, draftFromText, importFromLink, firstUrl, readForm, switchType, updatePreview, setPhoto, saveDraft, removeItem } from './editor.js';
 import { mode, modeView, enterMode, exitMode, startTimer, stopTimer } from './modes.js';
-import { settingsView } from './settings.js';
+import { settingsView, startHome, setStartHome } from './settings.js';
 import { dueLabel } from '../shared/tasks.js';
 import { todoView, todoUi, quickPreview, toggleTask, toggleStar, toggleStep, quickAdd, clearDone } from './todo.js';
 
@@ -59,7 +59,8 @@ function render({ keepScroll = false } = {}) {
     import('./library.js').then(m => { libraryMod = m; if (parseRoute().parts[0] === 'library') m.mount($('#library'), parseRoute().parts[1] || ''); });
     return;
   }
-  if (!a) { html = homeView(); tab = 'home'; }
+  if (!a) { html = homeView(); tab = 'house'; }
+  else if (a === 'home') { html = homeView(); tab = 'home'; }
   else if (a === 'recipes') { html = listView('recipe'); tab = 'recipes'; }
   else if (a === 'workouts' || a === 'gym') { html = listView('workout'); tab = 'workouts'; }
   else if (a === 'notes') { html = listView('note'); tab = 'notes'; }
@@ -198,10 +199,12 @@ async function readClipboard() {
 document.addEventListener('click', async event => {
   const el = event.target.closest('[data-action]');
   if (!el) return;
+  if (el.dataset.action === 'kitchen-search') { if (!kitchenMod?.openSearch()) location.hash = '#/recipes'; return; }
   const action = el.dataset.action;
   if (['theme', 'save', 'filter', 'quick', 'pick', 'paste-link', 'clipboard', 'back', 'tag', 'revert', 'delete', 'remove-photo', 'mode-next', 'mode-prev', 'toggle-ingredients', 'timer-start', 'timer-stop', 'sync-now', 'forget-pass', 'export', 'task-toggle', 'task-star', 'step-toggle', 'set-due', 'todo-filter', 'clear-done'].includes(action)) event.preventDefault();
   switch (action) {
     case 'reload-app': location.reload(); break;
+    case 'serves': { const it = store.getItem(el.dataset.id); if (!it) break; const n = Math.max(1, Math.min(48, (ui.serves.get(it.id) || it.servings || 1) + Number(el.dataset.delta))); if (n === it.servings) ui.serves.delete(it.id); else ui.serves.set(it.id, n); render({ keepScroll: true }); break; }
     case 'save': { const on = await store.toggleSaved(el.dataset.id); toast(on ? 'Added to favorites' : 'Removed from favorites'); break; }
     case 'task-toggle': {
       const row = el.closest('.task-row');
@@ -215,7 +218,7 @@ document.addEventListener('click', async event => {
     case 'set-due': { const input = el.form?.querySelector('input[name="due"]'); if (input) input.value = el.dataset.value; break; }
     case 'clear-done':
       if (el.dataset.confirm) { const n = await clearDone(); toast(`Cleared ${n}`); }
-      else { el.dataset.confirm = '1'; el.lastChild.textContent = 'Tap again to clear'; el.classList.add('btn-danger', 'confirming'); setTimeout(() => { if (el.isConnected) { delete el.dataset.confirm; render({ keepScroll: true }); } }, 4000); }
+      else { el.dataset.confirm = '1'; el.lastChild.textContent = 'Tap again to clear'; el.classList.add('btn-danger', 'confirming'); setTimeout(() => { if (el.isConnected) { delete el.dataset.confirm; render({ keepScroll: true }); } }, 8000); }
       break;
     case 'filter': ui.filters[el.dataset.key] = el.dataset.value; render({ keepScroll: true }); break;
     case 'quick': ui.quick[el.dataset.key] = ui.quick[el.dataset.key] === el.dataset.value ? '' : el.dataset.value; render({ keepScroll: true }); break;
@@ -245,8 +248,8 @@ document.addEventListener('click', async event => {
     case 'switch-type': switchType(el.form, el.value); render({ keepScroll: true }); break;
     case 'remove-photo': readForm(el.form); delete editing.draft.photo; render({ keepScroll: true }); break;
     case 'delete':
-      if (el.dataset.confirm) { const d = editing.draft; await removeItem(el.dataset.id); location.hash = `#/${{ recipe: 'recipes', workout: 'workouts', note: 'notes' }[d?.type] || ''}`; }
-      else { el.dataset.confirm = '1'; el.lastChild.textContent = 'Tap again to delete'; el.classList.add('confirming'); setTimeout(() => { if (el.isConnected) { delete el.dataset.confirm; el.lastChild.textContent = 'Delete'; el.classList.remove('confirming'); } }, 4000); }
+      if (el.dataset.confirm) { const d = editing.draft; await removeItem(el.dataset.id); location.hash = `#/${{ recipe: 'recipes', workout: 'workouts', note: 'notes', task: 'todo' }[d?.type] || ''}`; }
+      else { el.dataset.confirm = '1'; el.lastChild.textContent = 'Tap again to delete'; el.classList.add('confirming'); setTimeout(() => { if (el.isConnected) { delete el.dataset.confirm; el.lastChild.textContent = 'Delete'; el.classList.remove('confirming'); } }, 8000); }
       break;
     case 'mode-next': mode.index++; stopTimer(); mode.timerLeft = 0; mode.timerTotal = 0; render({ keepScroll: true }); break;
     case 'mode-prev': mode.index--; stopTimer(); mode.timerLeft = 0; mode.timerTotal = 0; render({ keepScroll: true }); break;
@@ -271,10 +274,12 @@ document.addEventListener('input', event => {
 });
 
 document.addEventListener('change', async event => {
+  if (event.target.dataset?.action === 'got') { const { id, index } = event.target.dataset; const set = ui.got.get(id) || new Set(); if (event.target.checked) set.add(Number(index)); else set.delete(Number(index)); ui.got.set(id, set); event.target.closest('li')?.classList.toggle('got', event.target.checked); return; }
   const el = event.target;
   const action = el.dataset.action;
   if (action === 'sort') { ui.sort[el.dataset.key] = el.value; render({ keepScroll: true }); }
   if (action === 'cuisine') { ui.cuisine[el.dataset.key] = el.value; render({ keepScroll: true }); }
+  if (action === 'start-home') { setStartHome(el.checked); render({ keepScroll: true }); }
   if (action === 'auto-night') { setAutoNight(el.checked); render({ keepScroll: true }); }
   if (action === 'photo' && el.files?.[0]) {
     readForm(el.form);
@@ -341,6 +346,8 @@ async function handleIncoming() {
 }
 
 await store.init();
+// Settings › "Start on the home screen": open the flat home screen instead of the living room.
+if ((!location.hash || location.hash === '#/' || location.hash === '#') && startHome() && !new URLSearchParams(location.search).get('add')) history.replaceState(null, '', '#/home');
 render();
 handleIncoming();
 

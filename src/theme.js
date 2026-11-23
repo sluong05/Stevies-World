@@ -12,11 +12,14 @@ const set = (k, v) => { try { localStorage.setItem(k, v); } catch { /* ignore */
 
 export const chosenTheme = () => (THEMES.some(t => t.id === get(KEY)) ? get(KEY) : 'meadow');
 export const autoNight = () => get(DARK_KEY) !== '0';
-const darkQuery = typeof matchMedia === 'function' ? matchMedia('(prefers-color-scheme: dark)') : null;
+// Meadow turns into Firefly night by the clock (8 PM to 5 AM), the same hours the greeting and
+// the painted sky use, rather than by the phone's dark mode, so the scene and "Good afternoon"
+// always agree. Keep in step with the inline script in index.html.
+export const isNightHour = (date = new Date()) => { const h = date.getHours(); return h >= 20 || h < 5; };
 
 export function activeTheme() {
   const chosen = chosenTheme();
-  return chosen === 'meadow' && autoNight() && darkQuery?.matches ? 'night' : chosen;
+  return chosen === 'meadow' && autoNight() && isNightHour() ? 'night' : chosen;
 }
 
 const loaded = new Set();
@@ -40,4 +43,7 @@ export function applyTheme() {
 }
 export function setTheme(id) { set(KEY, id); return applyTheme(); }
 export function setAutoNight(on) { set(DARK_KEY, on ? '1' : '0'); return applyTheme(); }
-darkQuery?.addEventListener?.('change', () => { applyTheme(); window.dispatchEvent(new Event('themechange')); });
+// Switch over at 8 PM / 5 AM while the app is open, and when coming back to it.
+let lastActive = null;
+const recheck = () => { const now = activeTheme(); if (lastActive && now !== lastActive) { applyTheme(); window.dispatchEvent(new Event('themechange')); } lastActive = now; };
+if (typeof window !== 'undefined') { setInterval(recheck, 60_000); document.addEventListener('visibilitychange', () => { if (!document.hidden) recheck(); }); recheck(); }

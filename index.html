@@ -19,7 +19,8 @@
     // Apply the saved theme before first paint so there's no flash.
     try {
       var t = localStorage.getItem('sw.theme') || 'meadow';
-      if (t === 'meadow' && localStorage.getItem('sw.autoNight') !== '0' && matchMedia('(prefers-color-scheme: dark)').matches) t = 'night';
+      var h = new Date().getHours();
+      if (t === 'meadow' && localStorage.getItem('sw.autoNight') !== '0' && (h >= 20 || h < 5)) t = 'night';
       document.documentElement.dataset.theme = t;
     } catch (e) {}
   </script>
@@ -29,8 +30,10 @@
 <body>
   <a class="skip-link" href="#main">Skip to content</a>
   <header class="topbar">
-    <a class="brand" href="#/" data-tab="home" aria-label="Back to the living room"><img src="/assets/icon.svg" width="30" height="30" alt="" /><span>stevies world</span></a>
+    <a class="brand" href="#/" data-tab="house" aria-label="Back to the living room"><img src="/assets/icon.svg" width="30" height="30" alt="" /><span>stevies world</span></a>
     <span class="room-name" id="room-name"></span>
+    <button class="round-btn search-btn" type="button" data-action="kitchen-search" aria-label="Search recipes"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="6.5"/><path d="m16 16 4.5 4.5"/></svg></button>
+    <a class="round-btn home-btn" href="#/home" data-tab="home" aria-label="Home screen"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M3 11.5 12 4l9 7.5"/><path d="M5.5 9.5V20h13V9.5"/><path d="M10 20v-5.5h4V20"/></svg></a>
     <a class="round-btn add-btn" href="#/add" data-tab="add" aria-label="Add"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg></a>
     <a class="round-btn settings-btn" href="#/settings" data-tab="settings" aria-label="Settings"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="12" cy="12" r="3"/><path d="M12 2.5v3M12 18.5v3M2.5 12h3M18.5 12h3M5.3 5.3l2.1 2.1M16.6 16.6l2.1 2.1M5.3 18.7l2.1-2.1M16.6 7.4l2.1-2.1"/></svg></a>
   </header>

@@ -47,7 +47,11 @@ export function mount(root, bookKey = '', recipeId = '') {
   document.body.classList.add('in-library', 'in-kitchen');
   try { buildRenderer(); buildScene(); }
   catch (error) { console.warn('Kitchen 3D unavailable', error); unmount(); root.innerHTML = listView('recipe'); return; }
+  // Size and place the camera now: a deep link (#/recipes/<book>) opens the book straight away,
+  // before the ResizeObserver or the render loop has set the camera up.
+  resize();
   focusBay(firstBay(), true);
+  { const midY = (shelfY(0) + 0.5 + COUNTER_Y - 0.12) / 2 - 0.03; S.camera.position.set(S.camX, midY + 0.12, DEPTH / 2 + S.dist); S.camera.lookAt(S.camX, midY, 0); S.camera.updateMatrixWorld(); }
   if (bookKey) route(bookKey, recipeId);
 }
 
@@ -73,6 +77,16 @@ export function route(bookKey, recipeId = '') {
   if (S.open?.book === b) { if (recipeId) jumpTo(recipeId); return; }
   if (S.open) closeBook(true).then(() => openBook(b, recipeId));
   else openBook(b, recipeId);
+}
+
+/** The top bar's search button: from the shelf or an open cookbook, zoom onto the chalkboard
+ *  and focus its search line in the same tap (so the phone keyboard opens). */
+export function openSearch() {
+  if (!S) return false;
+  S.searchInput.focus({ preventScroll: true }); S.caretOn = true;
+  if (S.open) { history.replaceState(null, '', '#/recipes'); closeBook().then(() => { if (S) { zoomTo('chalk'); S.searchInput.focus({ preventScroll: true }); drawChalk(); } }); }
+  else { zoomTo('chalk'); drawChalk(); }
+  return true;
 }
 
 /** Recipes or favorites changed (here, or synced from another device). */
@@ -136,8 +150,14 @@ function makeCounterTools() {
 
 function placeCounterTools() {
   if (!S.chalkGroup) return;
-  const cam = S.camera, zFront = S.cabFront - 0.06; // front edge of the worktop, in front of the pots on the stove
-  const depth = (DEPTH / 2 + S.dist - zFront) || 1; // from the shelf view, so zooming in doesn't move them
+  const cam = S.camera;
+  // Stand them at the front of the worktop, or further back when the front edge would be cut off by
+  // the bottom of the screen (wide screens frame the shelves, not the worktop).
+  const camZ = DEPTH / 2 + S.dist, camY = (shelfY(0) + 0.5 + COUNTER_Y - 0.12) / 2 - 0.03 + 0.12;
+  const tanV = Math.tan(THREE.MathUtils.degToRad(cam.fov / 2)), tilt = 0.12 / camZ;
+  const fitDepth = (camY - COUNTER_Y - 0.03) / (tanV + tilt);
+  const zFront = Math.max(Math.min(S.cabFront - 0.06, camZ - fitDepth), S.cabFront - 0.62 + 0.14); // 0.62: worktop depth
+  const depth = (camZ - zFront) || 1; // from the shelf view, so zooming in doesn't move them
   const halfW = Math.tan(THREE.MathUtils.degToRad(cam.fov / 2)) * cam.aspect * depth;
   const k = Math.min(1, halfW / 0.42);
   S.chalkGroup.scale.setScalar(k);
@@ -149,7 +169,7 @@ function placeCounterTools() {
   S.chalkGroup.visible = S.boxGroup.visible = !S.open;
 }
 
-function chalkLine(g, text, x, y, size = 34, color = '#f4f1e8', font = '"Kiwi Maru", Georgia, serif') {
+function chalkLine(g, text, x, y, size = 34, color = '#f4f1e8', font = '"SW Macrons", "Kiwi Maru", Georgia, serif') {
   g.fillStyle = color; g.font = `${size}px ${font}`; g.fillText(text, x, y);
 }
 function drawChalk() {
@@ -167,7 +187,7 @@ function drawChalk() {
   g.strokeStyle = 'rgba(244,241,232,.75)'; g.lineWidth = 3; rrect(g, 30, 26, CHALK_W - 60, 70, 35); g.stroke();
   chalkLine(g, '⌕', 52, 76, 40);
   let shown = q || (focused ? '' : 'Search recipes…');
-  g.font = '34px "Kiwi Maru", Georgia, serif';
+  g.font = '34px "SW Macrons", "Kiwi Maru", Georgia, serif';
   while (g.measureText(shown).width > CHALK_W - 170 && shown.length > 1) shown = shown.slice(1);
   chalkLine(g, shown, 98, 74, 34, q ? '#fffbe8' : 'rgba(244,241,232,.55)');
   if (focused && S.caretOn) g.fillRect(100 + (q ? g.measureText(shown).width : 0), 44, 3, 38);
@@ -179,7 +199,7 @@ function drawChalk() {
     hits.forEach((h, i) => {
       const y = 158 + i * 62;
       let t = `${isSaved(h.id) ? '♥ ' : '• '}${h.title}`;
-      g.font = '32px "Kiwi Maru", Georgia, serif';
+      g.font = '32px "SW Macrons", "Kiwi Maru", Georgia, serif';
       while (g.measureText(t).width > CHALK_W - 90 && t.length > 4) t = t.slice(0, -2);
       if (t.length < h.title.length + 2) t = t.trimEnd() + '…';
       chalkLine(g, t, 44, y, 32);
@@ -798,6 +818,7 @@ function detachPages() {
 }
 
 const M = 70, TOP = 92, BOTTOM = PAGE_H - 96, TEXT_W = PAGE_W - M * 2;
+const TOC_FONT = `27px ${HAND}`, TOC_LH = 36;
 const FONTS = {
   title: { font: '600 46px Georgia, serif', lh: 56, color: INK },
   kicker: { font: 'italic 26px Georgia, serif', lh: 40, color: LABEL },
@@ -813,8 +834,24 @@ const FONTS = {
 function paginate(book) {
   const g = S.scratch;
   const pages = [];
-  const contents = { kind: 'contents', ops: [] };
-  pages.push({ kind: 'title', ops: [] }, contents);
+  // Contents: every recipe, over as many pages as it takes, with long titles wrapped onto a
+  // second line rather than cut off. Laid out first so the recipe page numbers are known.
+  g.font = TOC_FONT;
+  const toc = book.recipes.map(r => {
+    let lines = layout(g, r.title.normalize('NFC'), TEXT_W - 80).map(l => l.text.trim());
+    if (lines.length > 2) { let last = lines.slice(1).join(' '); while (g.measureText(`${last}…`).width > TEXT_W - 80 && last.length > 4) last = last.slice(0, -1); lines = [lines[0], `${last.trimEnd()}…`]; }
+    return { id: r.id, lines };
+  });
+  const contentsPages = [];
+  let cy = BOTTOM;
+  for (const e of toc) {
+    const h = e.lines.length * TOC_LH + 12;
+    if (cy + h > BOTTOM) { contentsPages.push({ kind: 'contents', cont: contentsPages.length > 0, ops: [] }); cy = TOP + 64; }
+    contentsPages.at(-1).ops.push({ kind: 'toc', lines: e.lines, id: e.id, x: M, y: cy + TOC_LH });
+    cy += h;
+  }
+  if (!contentsPages.length) contentsPages.push({ kind: 'contents', ops: [] });
+  pages.push({ kind: 'title', ops: [] }, ...contentsPages);
   const starts = new Map();
   for (const r of book.recipes) {
     if (pages.length % 2) pages.push({ ops: [] });
@@ -873,17 +910,7 @@ function paginate(book) {
     if (!r.ingredients?.length && !r.steps?.length && !r.note && !r.description) put('note', 'No ingredients or steps saved yet. Tap “Full recipe” to add them.');
   }
   if (pages.length % 2) pages.push({ ops: [] });
-  // Contents page, now that every recipe has a page number.
-  let y = TOP + 70;
-  g.font = FONTS.line.font;
-  for (const r of book.recipes) {
-    if (y > BOTTOM - 40) { contents.more = book.recipes.length - contents.ops.length; break; }
-    let title = r.title;
-    while (g.measureText(title).width > TEXT_W - 90 && title.length > 4) title = title.slice(0, -2);
-    if (title !== r.title) title = title.trimEnd() + '…';
-    contents.ops.push({ kind: 'toc', text: title, num: String(starts.get(r.id) + 1), id: r.id, x: M, y });
-    y += 52;
-  }
+  for (const c of contentsPages) for (const op of c.ops) op.num = String(starts.get(op.id) + 1);
   return { pages, starts };
 }
 
@@ -928,19 +955,19 @@ function drawPage(g, page, index, book, gutterLeft) {
     g.fillText('Swipe or tap the right page to turn it.', PAGE_W / 2, 700);
     g.fillText('Tap beside the book to put it back.', PAGE_W / 2, 740);
   } else if (page.kind === 'contents') {
-    g.fillStyle = LABEL; g.font = '600 26px system-ui, sans-serif'; g.fillText('CONTENTS', M, TOP + 10);
+    g.fillStyle = LABEL; g.font = '600 26px system-ui, sans-serif'; g.fillText(page.cont ? 'CONTENTS, CONTINUED' : 'CONTENTS', M, TOP + 10);
     for (const op of page.ops) {
       const fav = isSaved(op.id);
-      g.fillStyle = INK; g.font = FONTS.line.font;
-      g.fillText(`${fav ? '♥ ' : ''}${op.text}`, op.x, op.y);
-      const w = g.measureText(`${fav ? '♥ ' : ''}${op.text}`).width;
+      g.fillStyle = INK; g.font = TOC_FONT;
+      op.lines.forEach((l, i) => g.fillText(`${fav && !i ? '♥ ' : ''}${l}`, op.x + (fav && i ? g.measureText('♥ ').width : 0), op.y + i * TOC_LH));
+      const lastY = op.y + (op.lines.length - 1) * TOC_LH;
+      const w = g.measureText(`${fav ? '♥ ' : ''}${op.lines.at(-1)}`).width; // a wrapped line is indented past the heart too
       g.fillStyle = FADED; g.font = '24px Georgia, serif'; g.textAlign = 'right';
-      g.fillText(op.num, PAGE_W - M, op.y);
+      g.fillText(op.num, PAGE_W - M, lastY);
       g.textAlign = 'left';
-      g.strokeStyle = 'rgba(74, 48, 32, .25)'; g.setLineDash([3, 7]); g.beginPath(); g.moveTo(op.x + w + 12, op.y - 6); g.lineTo(PAGE_W - M - 50, op.y - 6); g.stroke(); g.setLineDash([]);
-      regions.push({ x0: 0, x1: PAGE_W, y0: op.y - 38, y1: op.y + 12, act: 'goto', id: op.id });
+      g.strokeStyle = 'rgba(74, 48, 32, .25)'; g.setLineDash([3, 7]); g.beginPath(); g.moveTo(op.x + w + 12, lastY - 6); g.lineTo(PAGE_W - M - 50, lastY - 6); g.stroke(); g.setLineDash([]);
+      regions.push({ x0: 0, x1: PAGE_W, y0: op.y - 34, y1: lastY + 10, act: 'goto', id: op.id });
     }
-    if (page.more) { g.fillStyle = FADED; g.font = 'italic 24px Georgia, serif'; g.fillText(`…and ${page.more} more. Keep flipping.`, M, BOTTOM - 10); }
   } else {
     for (const op of page.ops) {
       if (op.kind === 'photo') {

@@ -7,7 +7,7 @@ import { dueLabel } from '../shared/tasks.js';
 import { cuisineOf } from '../shared/cuisine.js';
 
 const SECTION = { recipe: { path: 'recipes', name: 'Recipes', icon: 'bowl' }, workout: { path: 'workouts', name: 'Workouts', icon: 'dumbbell' }, note: { path: 'notes', name: 'Notes', icon: 'leaf' }, task: { path: 'todo', name: 'To-do', icon: 'checkbox' } };
-export const ui = { query: '', filters: { recipes: 'All', workouts: 'All', notes: 'All' }, quick: { recipes: '', workouts: '' }, sort: { recipes: 'new' }, cuisine: { recipes: 'All' } };
+export const ui = { got: new Map(), serves: new Map(), query: '', filters: { recipes: 'All', workouts: 'All', notes: 'All' }, quick: { recipes: '', workouts: '' }, sort: { recipes: 'new' }, cuisine: { recipes: 'All' } };
 
 const newest = (a, b) => (b.updatedAt || 0) - (a.updatedAt || 0);
 const protein = i => i.nutrition?.protein ?? null;
@@ -172,6 +172,44 @@ function nutritionBlock(item) {
   </section>`;
 }
 
+// Servings scaler: scales the quantity at the start of an ingredient line ("1 1/2 cups", "8 oz (225 g)").
+const FRAC = { '¼': 0.25, '½': 0.5, '¾': 0.75, '⅓': 1 / 3, '⅔': 2 / 3, '⅛': 0.125 };
+const NUM = String.raw`(\d+\s+\d+\/\d+|\d+\/\d+|\d+(?:\.\d+)?\s*[¼½¾⅓⅔⅛]|\d+(?:\.\d+)?|[¼½¾⅓⅔⅛])`;
+const readNum = t => {
+  t = t.trim();
+  const m = t.match(/^(\d+(?:\.\d+)?)?\s*([¼½¾⅓⅔⅛])$/);
+  if (m) return Number(m[1] || 0) + FRAC[m[2]];
+  if (/^\d+\s+\d+\/\d+$/.test(t)) { const [w, f] = t.split(/\s+/); const [a, b] = f.split('/'); return Number(w) + a / b; }
+  if (t.includes('/')) { const [a, b] = t.split('/'); return a / b; }
+  return Number(t);
+};
+const showNum = v => {
+  if (v >= 10) return String(Math.round(v));
+  const w = Math.floor(v + 1e-6), r = v - w;
+  const [frac, glyph] = [[0, ''], [0.125, '⅛'], [0.25, '¼'], [1 / 3, '⅓'], [0.5, '½'], [2 / 3, '⅔'], [0.75, '¾'], [1, '']].reduce((a, b) => (Math.abs(b[0] - r) < Math.abs(a[0] - r) ? b : a));
+  const whole = frac === 1 ? w + 1 : w;
+  return glyph ? `${whole || ''}${glyph}` : String(whole || glyph || 0);
+};
+const LEAD = new RegExp(`^(\\s*)${NUM}(\\s*(?:-|–|to)\\s*${NUM})?(\\s*[a-zA-Z]+\\.?\\s*\\(\\s*${NUM}\\s*[a-zA-Z]+\\s*\\))?`);
+export function scaleLine(line, k) {
+  if (k === 1) return line;
+  return line.replace(LEAD, (all, sp, a, rng, b, unitParen, c) => {
+    let out = sp + showNum(readNum(a) * k);
+    if (rng) out += rng.replace(b, showNum(readNum(b) * k));
+    if (unitParen) out += unitParen.replace(new RegExp(`\\(\\s*${NUM}`), () => `(${showNum(readNum(c) * k)}`);
+    return out;
+  });
+}
+
+function ingredientBlock(item) {
+  const k = (ui.serves.get(item.id) || item.servings || 1) / (item.servings || 1);
+  const got = ui.got.get(item.id) || new Set();
+  const rows = item.ingredients.map((l, i) => (/:\s*$/.test(l) && l.length < 60
+    ? `<li class="subhead">${escape(l.replace(/:\s*$/, ''))}</li>`
+    : `<li class="${got.has(i) ? 'got' : ''}"><label><input type="checkbox" data-action="got" data-id="${escape(item.id)}" data-index="${i}" ${got.has(i) ? 'checked' : ''}/><span>${escape(scaleLine(l, k))}</span></label></li>`)).join('');
+  return `<section class="block"><h2>Ingredients${k !== 1 ? ` <small class="scaled-note">for ${ui.serves.get(item.id)} servings</small>` : ''}</h2><ul class="ingredients checkable">${rows}</ul></section>`;
+}
+
 const lineList = (lines, ordered) => {
   let n = 0;
   const out = lines.map(l => (/:\s*$/.test(l) && l.length < 60
@@ -191,13 +229,19 @@ export function itemView(id) {
   const source = item.sourceUrl ? `<a class="btn btn-ghost" href="${escape(item.sourceUrl)}" target="_blank" rel="noopener noreferrer">${icon('link')}${escape(item.sourceName ? `Open on ${item.sourceName.replace(/^.* on /, '')}` : 'Open original')}</a>` : '';
   const facts = [];
   if (item.minutes) facts.push(`${icon('clock')}${formatMinutes(item.minutes)}`);
-  if (item.type === 'recipe' && item.servings) facts.push(`${icon('people')}Serves ${item.servings}`);
+  const serves = item.type === 'recipe' && item.servings ? ui.serves.get(item.id) || item.servings : 0;
+  if (serves) facts.push(`${icon('people')}<span class="scaler"><button class="scale-btn" data-action="serves" data-id="${escape(item.id)}" data-delta="-1" aria-label="Fewer servings" ${serves <= 1 ? 'disabled' : ''}>−</button>Serves ${serves}<button class="scale-btn" data-action="serves" data-id="${escape(item.id)}" data-delta="1" aria-label="More servings">+</button></span>`);
+  // the per-serving numbers sit with the time and servings, not at the bottom of the page
+  const nut = item.type === 'recipe' ? item.nutrition : null;
+  if (typeof nut?.calories === 'number') facts.push(`<b>${Math.round(nut.calories)}</b>&nbsp;cal`);
+  if (typeof nut?.protein === 'number') facts.push(`<b>${Math.round(nut.protein)} g</b>&nbsp;protein`);
+  if (item.type === 'recipe' && Number.isFinite(item.cost?.total)) facts.push(`<b>$${(item.cost.total / (item.servings || 1)).toFixed(2)}</b>&nbsp;a serving`);
   if (item.type === 'workout') facts.push(`${icon('dumbbell')}${escape(item.focus || 'Workout')}`);
   if (item.type === 'workout' && item.equipment) facts.push(escape(item.equipment));
   if (item.type === 'note') facts.push(escape(item.category || 'Note'));
   let content = '';
   if (item.type === 'recipe') {
-    content = `${item.ingredients?.length ? `<section class="block"><h2>Ingredients</h2>${lineList(item.ingredients, false)}</section>` : ''}
+    content = `${item.ingredients?.length ? ingredientBlock(item) : ''}
       ${item.steps?.length ? `<section class="block"><h2>Steps</h2>${lineList(item.steps, true)}</section>` : ''}
       ${nutritionBlock(item)}`;
   } else if (item.type === 'workout') {
@@ -231,10 +275,12 @@ export function itemView(id) {
 
 // ---------- the house ----------
 export const DOORS = [
+  ['#/todo', 'To-do', 'Office monitor', 'checkbox'],
   ['#/recipes', 'Kitchen', 'Recipes', 'bowl'],
-  ['#/gym', 'Gym', 'Workouts', 'dumbbell'],
+  ['#/workouts', 'Gym', 'Workouts', 'dumbbell'],
+  ['#/notes', 'Notes', 'Office corkboard', 'note'],
   ['#/library', 'Library', 'Journal', 'book'],
-  ['#/office', 'Office', 'To-do & Notes', 'checkbox'],
+  ['#/', 'Living room', 'The 3D house', 'home'],
 ];
 export function doorList() {
   return `<nav class="door-list" aria-label="Rooms">${DOORS.map(([href, room, sub, ic]) => `<a class="door-chip" href="${href}">${icon(ic)}<span><strong>${room}</strong><small>${sub}</small></span></a>`).join('')}</nav>`;

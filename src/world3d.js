@@ -13,6 +13,7 @@ import { toast } from './ui.js';
 import { editing } from './editor.js';
 import { mode, startTimer, stopTimer, addTime, parseSeconds, markDone, lastDone, agoLabel } from './modes.js';
 import { THEMES, chosenTheme, autoNight } from './theme.js';
+import { startHome } from './settings.js';
 
 const reduced = typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches;
 let renderer = null, failed = false;
@@ -122,7 +123,7 @@ function plaque(label, sub, w = 0.9, h = 0.34, { bg = '#f6e7c4', ink = '#4a3220'
     g.fillStyle = edge; g.fillRect(0, 0, W, H);
     g.fillStyle = bg; g.fillRect(8, 8, W - 16, H - 16);
     g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillStyle = ink;
-    g.font = `600 ${Math.round(H * (sub ? 0.42 : 0.55))}px "Kiwi Maru", Georgia, serif`;
+    g.font = `600 ${Math.round(H * (sub ? 0.42 : 0.55))}px "SW Macrons", "Kiwi Maru", Georgia, serif`;
     g.fillText(label, W / 2, sub ? H * 0.4 : H / 2);
     if (sub) { g.fillStyle = soft; g.font = `${Math.round(H * 0.26)}px "Zen Maru Gothic", system-ui, sans-serif`; g.fillText(sub, W / 2, H * 0.77); }
   };
@@ -341,7 +342,7 @@ function livingRoom(night) {
 
   let lblink = 0;
   return {
-    scene, spots, eye: new THREE.Vector3(0, 1.65, 3.4), yawCenter: Math.PI, yawRange: 1.55, pitch: -0.14,
+    scene, spots, eye: new THREE.Vector3(0, 1.65, 3.4), yawCenter: Math.PI, yawRange: 1.55, pitch: -0.14, startYaw: 0.8, // open facing the Kitchen door, so a door is on screen without dragging
     focus: { notepad: focusOf(addPanel.mesh), panel: focusOf(setPanel.mesh) },
     panels: lpanels,
     refresh() { addPanel.dirty = true; setPanel.dirty = true; },
@@ -453,7 +454,8 @@ function gym(night) {
   [-0.6, 0.6].forEach(x => box(0.06, 1.2, 0.06, 0x3a3f47, x, 0.6, -0.75, bench));
   const bar = cyl(0.025, 0.025, 2.0, 0x9aa3ab, 0, 1.15, -0.75, bench, 8); bar.rotation.z = Math.PI / 2;
   [-0.8, 0.8].forEach(x => { const p = cyl(0.3, 0.3, 0.08, accent, x, 1.15, -0.75, bench, 24); p.rotation.z = Math.PI / 2; });
-  bench.position.set(-2.4, 0, -0.6); bench.rotation.y = 0.4; scene.add(bench);
+  // kept to the side, out of the line of sight from the room to the whiteboard
+  bench.position.set(-3.3, 0, -1.2); bench.rotation.y = 0.4; scene.add(bench);
   // yoga mat + kettlebells
   const yoga = box(0.7, 0.02, 1.8, 0x8a5a9a, 2.2, 0.01, -1.0); scene.add(yoga);
   [[1.4, -2.2, 0.16], [1.7, -2.3, 0.13], [1.95, -2.25, 0.1]].forEach(([x, z, r]) => {
@@ -498,7 +500,8 @@ function gym(night) {
 function focusOf(mesh) {
   const center = mesh.getWorldPosition(new THREE.Vector3());
   const normal = new THREE.Vector3(0, 0, 1).applyQuaternion(mesh.getWorldQuaternion(new THREE.Quaternion()));
-  return { center, normal, w: mesh.geometry.parameters.width, h: mesh.geometry.parameters.height, mesh };
+  const up = new THREE.Vector3(0, 1, 0).applyQuaternion(mesh.getWorldQuaternion(new THREE.Quaternion()));
+  return { center, normal, up, w: mesh.geometry.parameters.width, h: mesh.geometry.parameters.height, mesh };
 }
 
 // ---------- canvas panels: flat screens and papers drawn with 2D canvas, shown in 3D ----------
@@ -535,7 +538,7 @@ function ellipsis(g, text, maxW) {
 }
 const plainText = s => String(s || '').replace(/^#+\s*/gm, '').replace(/[*_`>]/g, '').replace(/^\s*[-•]\s+/gm, '• ').replace(/\[([^\]]+)\]\([^)]*\)/g, '$1');
 const FONT = '"Zen Maru Gothic", "Atkinson Hyperlegible", system-ui, sans-serif';
-const HEAD = '"Kiwi Maru", Georgia, serif';
+const HEAD = '"SW Macrons", "Kiwi Maru", Georgia, serif';
 
 // The desk monitor: the To-do app on a tall screen.
 const todoState = { filter: 'All' };
@@ -574,7 +577,7 @@ function drawTodo(p, night) {
   if (typing && Math.floor(performance.now() / 500) % 2) { const cx = 48 + (val ? g.measureText(shown).width : 0) + 2; g.fillStyle = accent; g.fillRect(cx, 248, 3, 40); }
   g.fillStyle = accent; rr(g, W - 140, 242, 104, 52, 26); g.fill();
   g.fillStyle = night ? '#1a2238' : '#fffdf3'; g.font = `600 28px ${FONT}`; g.textAlign = 'center'; g.fillText('Add', W - 88, 269); g.textAlign = 'left';
-  p.hits.push({ x: 24, y: 230, w: W - 180, h: 76, fn: () => focusDesk(), keep: true });
+  p.hits.push({ x: 24, y: 230, w: W - 180, h: 76, fn: () => focusDesk(), keep: true, field: true });
   p.hits.push({ x: W - 150, y: 230, w: 126, h: 76, fn: () => submitDesk() });
   let listTop = 318;
   // live preview of what the quick-add understood (day, list, star, repeat)
@@ -761,7 +764,7 @@ function drawGym(p, night) {
   g.fillText(shown, 94, 210);
   if (typing && Math.floor(performance.now() / 500) % 2) { g.fillStyle = blue; g.fillRect(94 + (val ? g.measureText(shown).width : 0) + 2, 190, 3, 38); }
   if (val) { g.fillStyle = soft; g.font = `600 30px ${FONT}`; g.fillText('×', W - 66, 208); p.hits.push({ x: W - 96, y: 176, w: 72, h: 66, fn: () => { searchInput.value = ''; } }); }
-  p.hits.push({ x: 24, y: 176, w: W - 120, h: 66, fn: () => focusSearch(), keep: true });
+  p.hits.push({ x: 24, y: 176, w: W - 120, h: 66, fn: () => focusSearch(), keep: true, field: true });
   // filter chips (wrap)
   const cats = ['All', 'Favorites', ...[...new Set(all.map(i => i.focus || 'Other'))].sort()];
   if (!cats.includes(gymState.filter)) gymState.filter = 'All';
@@ -857,7 +860,7 @@ function drawAdd(p, night) {
   if (!val) caretText(g, 110, 190, '', 'Paste a TikTok, Instagram, YouTube or recipe link…', addInput, W - 160, ink, soft);
   else lines.forEach((l, i) => { g.fillStyle = ink; g.fillText(l, 110, 186 + i * 36); });
   if (val && document.activeElement === addInput && Math.floor(performance.now() / 500) % 2) { const last = lines[lines.length - 1]; g.fillStyle = green; g.fillRect(110 + g.measureText(last).width + 2, 168 + (lines.length - 1) * 36, 3, 34); }
-  p.hits.push({ x: 90, y: 150, w: W - 120, h: 130, fn: () => focusTyper(addInput), keep: true });
+  p.hits.push({ x: 90, y: 150, w: W - 120, h: 130, fn: () => focusTyper(addInput), keep: true, field: true });
   let y = 300;
   if (st.error) { g.fillStyle = st.needsText ? green : red; g.font = `400 22px ${FONT}`; g.textBaseline = 'alphabetic'; wrap(g, st.error, W - 130, 3).forEach((l, i) => g.fillText(l, 92, y + 20 + i * 30)); y += 24 + Math.min(3, wrap(g, st.error, W - 130, 3).length) * 30; }
   // it's a…
@@ -918,8 +921,15 @@ function drawSettings(p, night) {
   g.fillStyle = an ? green : '#cbb894'; rr(g, 30, y, 74, 40, 20); g.fill();
   g.fillStyle = '#fff'; g.beginPath(); g.arc(an ? 84 : 50, y + 20, 15, 0, 7); g.fill();
   g.fillStyle = ink; g.font = `400 23px ${FONT}`; g.textBaseline = 'middle';
-  wrap(g, 'Firefly night when my phone is in dark mode', W - 150, 2).forEach((l, i) => g.fillText(l, 120, y + 12 + i * 28));
+  wrap(g, 'Firefly night after dark (8 PM to 5 AM)', W - 150, 2).forEach((l, i) => g.fillText(l, 120, y + 12 + i * 28));
   p.hits.push({ x: 24, y: y - 6, w: W - 48, h: 60, fn: () => press('[data-action="auto-night"]') });
+  const sh = startHome();
+  y += 64;
+  g.fillStyle = sh ? green : '#cbb894'; rr(g, 30, y, 74, 40, 20); g.fill();
+  g.fillStyle = '#fff'; g.beginPath(); g.arc(sh ? 84 : 50, y + 20, 15, 0, 7); g.fill();
+  g.fillStyle = ink; g.font = `400 23px ${FONT}`; g.textBaseline = 'middle';
+  wrap(g, 'Start on the home screen instead of the living room', W - 150, 2).forEach((l, i) => g.fillText(l, 120, y + 12 + i * 28));
+  p.hits.push({ x: 24, y: y - 6, w: W - 48, h: 60, fn: () => press('[data-action="start-home"]') });
   // sync
   y += 100; section('Sync', y); y += 44;
   const sy = syncState();
@@ -931,12 +941,8 @@ function drawSettings(p, night) {
     g.fillStyle = '#fffaf0'; rr(g, 30, y, W - 220, 60, 30); g.fill(); g.lineWidth = 3; g.strokeStyle = document.activeElement === passInput ? green : '#d4c19c'; g.stroke();
     g.font = `400 24px ${FONT}`; g.textBaseline = 'middle';
     caretText(g, 54, y + 31, passInput?.value || '', sy.hasPasscode ? 'New passcode' : 'Passcode', passInput, W - 270, ink, soft, true);
-    p.hits.push({ x: 30, y, w: W - 220, h: 60, fn: () => focusTyper(passInput), keep: true });
-    pill(p, W - 180, y, 150, 60, sy.hasPasscode ? 'Update' : 'Connect', { fill: green, text: '#fff', fn: () => {
-      const inp = fb('form[data-form="passcode"] input[name="passcode"]'); const form = fb('form[data-form="passcode"]');
-      if (!inp || !form || !passInput.value) { focusTyper(passInput); return; }
-      inp.value = passInput.value; passInput.value = ''; form.requestSubmit();
-    } });
+    p.hits.push({ x: 30, y, w: W - 220, h: 60, fn: () => focusTyper(passInput), keep: true, field: true });
+    pill(p, W - 180, y, 150, 60, sy.hasPasscode ? 'Update' : 'Connect', { fill: green, text: '#fff', fn: submitPass });
     y += 76;
     if (sy.hasPasscode) {
       pill(p, 30, y, 200, 54, 'Sync now', { stroke: green, text: green, fn: () => press('[data-action="sync-now"]') });
@@ -1000,6 +1006,15 @@ function drawWorkout(p, it) {
 const typingIn = () => document.activeElement?.closest?.('.room-fallback') ? document.activeElement : null;
 document.addEventListener('input', e => { if (e.target.closest?.('.room-fallback')) for (const p of Object.values(room?.panels || {})) p.dirty = true; });
 document.addEventListener('focusout', () => setTimeout(() => { for (const p of Object.values(room?.panels || {})) p.dirty = true; }, 0));
+// Any change to the hidden DOM behind a screen (a button relabelled, an attribute flipped, a list
+// re-rendered) redraws the 3D screens on the next frame.
+if (typeof MutationObserver === 'function') {
+  new MutationObserver(muts => {
+    if (!room?.panels || !muts.some(m => m.target.closest?.('.room-fallback') || m.target.parentElement?.closest('.room-fallback') || [...m.addedNodes].some(n => n.classList?.contains('room-fallback')))) return;
+    for (const p of Object.values(room.panels)) p.dirty = true;
+    wake();
+  }).observe(document.getElementById('main'), { subtree: true, childList: true, characterData: true, attributes: true });
+}
 
 function fieldBox(p, x, y, w, h, el, placeholder, { multiline = false, font = 28 } = {}) {
   const { g } = p;
@@ -1021,7 +1036,7 @@ function fieldBox(p, x, y, w, h, el, placeholder, { multiline = false, font = 28
     g.fillStyle = '#3f6e3c'; g.fillRect(x + 20 + (val ? Math.min(g.measureText(last).width, w - 44) : 0) + 2, y + 18 + (val ? lines.length - 1 : 0) * lh, 3, font + 8);
   }
   g.restore();
-  if (el) p.hits.push({ x, y, w, h, keep: true, fn: () => { el.focus({ preventScroll: true }); try { el.setSelectionRange(el.value.length, el.value.length); } catch { /* ignore */ } } });
+  if (el) p.hits.push({ x, y, w, h, keep: true, field: true, fn: () => { el.focus({ preventScroll: true }); try { el.setSelectionRange(el.value.length, el.value.length); } catch { /* ignore */ } } });
 }
 
 // A note being written, on a big sheet pinned to the corkboard.
@@ -1056,7 +1071,7 @@ function drawNoteEditor(p) {
   y += 56;
   const del = fb('form[data-form="editor"] [data-action="delete"]');
   fieldBox(p, 48, y, W - 96, H - y - (del ? 130 : 60), body, 'Write anything. “## ” makes a heading, “- ” a list.', { multiline: true, font: 26 });
-  if (del) pill(p, 48, H - 112, 200, 54, 'Delete', { stroke: '#c4513f', text: '#c4513f', fn: () => del.click() });
+  if (del) pill(p, 48, H - 112, 200, 54, del.dataset.confirm ? 'Tap again' : 'Delete', del.dataset.confirm ? { fill: '#c4513f', stroke: '#c4513f', text: '#fff', fn: () => del.click() } : { stroke: '#c4513f', text: '#c4513f', fn: () => del.click() });
   p.maxScroll = 0;
   p.tex.needsUpdate = true;
 }
@@ -1101,7 +1116,7 @@ function drawWorkoutEditor(p) {
   g.fillStyle = soft; g.font = `400 20px ${FONT}`; g.fillText('One per line: “Squat 3x10 rest 60s”. “Main:” starts a section.', 28, y + 18); y += 30;
   const del = fb('form[data-form="editor"] [data-action="delete"]');
   fieldBox(p, 24, y, W - 48, H - y - (del ? 100 : 30), ef('exercises'), 'Warm-up:\nBike 5 min', { multiline: true, font: 24 });
-  if (del) pill(p, 24, H - 84, 180, 56, 'Delete', { stroke: '#c4513f', text: '#c4513f', fn: () => del.click() });
+  if (del) pill(p, 24, H - 84, 180, 56, del.dataset.confirm ? 'Tap again' : 'Delete', del.dataset.confirm ? { fill: '#c4513f', stroke: '#c4513f', text: '#fff', fn: () => del.click() } : { stroke: '#c4513f', text: '#c4513f', fn: () => del.click() });
   p.maxScroll = 0;
   p.tex.needsUpdate = true;
 }
@@ -1133,7 +1148,7 @@ function drawTaskEditor(p, night) {
   const rest = H - y - (del ? 80 : 20), half = (rest - 12) / 2;
   fieldBox(p, 24, y, W - 48, half, ef('steps'), 'Steps, one per line (optional)', { multiline: true, font: 22 }); y += half + 12;
   fieldBox(p, 24, y, W - 48, half, ef('note'), 'Notes: details, who to ask…', { multiline: true, font: 22 });
-  if (del) pill(p, 24, H - 66, 160, 50, 'Delete', { stroke: '#c4513f', text: '#c4513f', fn: () => del.click() });
+  if (del) pill(p, 24, H - 66, 160, 50, del.dataset.confirm ? 'Tap again' : 'Delete', del.dataset.confirm ? { fill: '#c4513f', stroke: '#c4513f', text: '#fff', fn: () => del.click() } : { stroke: '#c4513f', text: '#c4513f', fn: () => del.click() });
   p.maxScroll = 0;
   p.tex.needsUpdate = true;
 }
@@ -1360,6 +1375,14 @@ const ROOMS = { living: livingRoom, kitchen, gym, office };
 
 // ---------- typing on the monitor ----------
 let deskInput = null, searchInput = null, addInput = null, passInput = null, detailId = null;
+let passForm = null;
+// The sync passcode is typed into a real, visible password field (in a form with a username),
+// so password managers can offer and save it. It shows over the scene while it has focus.
+function submitPass() {
+  const inp = fb('form[data-form="passcode"] input[name="passcode"]'); const form = fb('form[data-form="passcode"]');
+  if (!inp || !form || !passInput.value) { focusTyper(passInput); return; }
+  inp.value = passInput.value; passInput.value = ''; passInput.blur(); form.requestSubmit();
+}
 function focusTyper(el) { el?.focus({ preventScroll: true }); for (const p of Object.values(room?.panels || {})) p.dirty = true; }
 function focusSearch() { searchInput?.focus({ preventScroll: true }); if (room?.panels?.whiteboard) room.panels.whiteboard.dirty = true; }
 const blurTyping = () => { for (const el of [deskInput, searchInput, addInput, passInput]) if (el && document.activeElement === el) el.blur(); typingIn()?.blur(); };
@@ -1398,34 +1421,49 @@ function ensure() {
   searchInput.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); searchInput.blur(); } });
   addInput = document.createElement('textarea');
   addInput.className = 'lib-hidden-input'; addInput.id = 'add-input'; addInput.setAttribute('aria-label', 'Paste a link or the caption text'); addInput.autocapitalize = 'off'; addInput.spellcheck = false;
-  passInput = document.createElement('input');
-  passInput.className = 'lib-hidden-input'; passInput.id = 'pass-input'; passInput.type = 'password'; passInput.autocomplete = 'current-password'; passInput.setAttribute('aria-label', 'Sync passcode');
-  document.body.append(addInput, passInput);
+  passForm = document.createElement('form');
+  passForm.className = 'pass-form'; passForm.setAttribute('aria-label', 'Sync passcode');
+  passForm.innerHTML = '<input class="sr-only" type="text" name="username" autocomplete="username" value="Stevies World" readonly tabindex="-1" aria-hidden="true" /><input id="pass-input" name="password" type="password" autocomplete="current-password" enterkeyhint="go" placeholder="Sync passcode" aria-label="Sync passcode" /><button type="submit">Connect</button>';
+  passInput = passForm.querySelector('#pass-input');
+  passForm.addEventListener('submit', e => { e.preventDefault(); submitPass(); });
+  passInput.addEventListener('focus', () => document.body.classList.add('pass-live'));
+  passInput.addEventListener('blur', () => setTimeout(() => { if (document.activeElement !== passInput) document.body.classList.remove('pass-live'); }, 150));
+  document.body.append(addInput, passForm);
   for (const el of [addInput, passInput]) {
     el.addEventListener('input', () => { for (const p of Object.values(room?.panels || {})) p.dirty = true; });
     el.addEventListener('blur', () => { for (const p of Object.values(room?.panels || {})) p.dirty = true; });
   }
   renderer.domElement.addEventListener('webglcontextlost', e => { e.preventDefault(); failed = true; stop(); document.body.classList.remove('world-live'); document.body.classList.add('world-failed'); });
-  addEventListener('resize', () => { resize(); wake(); });
+  // Re-frame whenever the viewport changes size, including rotation and the phone's toolbars.
+  const onResize = () => { resize(); wake(); };
+  addEventListener('resize', onResize);
+  addEventListener('orientationchange', () => { onResize(); setTimeout(onResize, 250); });
+  window.visualViewport?.addEventListener('resize', onResize);
+  if (typeof ResizeObserver === 'function') new ResizeObserver(onResize).observe(host);
   addEventListener('scroll', onScroll, { passive: true });
   document.addEventListener('visibilitychange', wake);
   // Drag over the stage to look around (or scroll a screen when zoomed in); tap to use things.
   let down = null;
   document.addEventListener('pointerdown', e => {
     if (!room || !e.target.closest?.('.room-stage') || e.target.closest('a,button,input,select,textarea')) return;
-    down = { x: e.clientX, y: e.clientY, lx: e.clientX, ly: e.clientY, t: performance.now() };
+    down = { x: e.clientX, y: e.clientY, lx: e.clientX, ly: e.clientY, t: performance.now() }; heldAt = performance.now();
+    // Stop the compatibility mousedown from focusing <main>, which would steal focus from a field a tap just focused.
+    e.preventDefault();
   });
   document.addEventListener('pointermove', e => {
     if (!down) return;
+    // ignore finger jitter, so a tap doesn't also turn the camera away from what was tapped
+    if (!down.moved && Math.hypot(e.clientX - down.x, e.clientY - down.y) < 14) return;
+    down.moved = true;
     const dx = (e.clientX - down.lx) / innerWidth, dy = e.clientY - down.ly;
     down.lx = e.clientX; down.ly = e.clientY;
     const p = focusName && room.panels?.[focusName];
     if (p) { p.scroll = Math.max(0, Math.min(p.maxScroll, p.scroll - dy * (p.canvas.height / (host.clientHeight * 0.9)))); p.dirty = true; }
-    else { yawVel += dx * 2.2; heldAt = performance.now(); }
+    else { yawVel += dx * 2.2; heldAt = performance.now(); if (Math.abs(e.clientX - down.x) > 12) hideHint(); }
     wake();
   });
   document.addEventListener('pointerup', e => {
-    if (down && Math.hypot(e.clientX - down.x, e.clientY - down.y) < 10 && performance.now() - down.t < 450) tapAt(e.clientX, e.clientY);
+    if (down && !down.moved && performance.now() - down.t < 700) tapAt(e.clientX, e.clientY);
     down = null;
   });
   document.addEventListener('pointercancel', () => { down = null; });
@@ -1434,6 +1472,14 @@ function ensure() {
     if (!p || !e.target.closest?.('.room-stage')) return;
     p.scroll = Math.max(0, Math.min(p.maxScroll, p.scroll + e.deltaY)); p.dirty = true; wake();
   }, { passive: true });
+  // Arrow keys turn the view (desktop) without clicking the canvas first.
+  document.addEventListener('keydown', e => {
+    if (!room || focusName || flying || e.altKey || e.metaKey || e.ctrlKey) return;
+    if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return;
+    if (e.target.closest?.('input, textarea, select, [contenteditable="true"]') || document.body.classList.contains('in-mode')) return;
+    e.preventDefault();
+    yawVel += e.key === 'ArrowLeft' ? 0.09 : -0.09; heldAt = performance.now(); hideHint(); wake();
+  });
   signs.addEventListener('click', e => {
     const a = e.target.closest('a[data-spot]');
     if (!a) return;
@@ -1443,12 +1489,31 @@ function ensure() {
   return renderer;
 }
 
+// First visit: a short hint on how to move around the living room.
+const HINT_KEY = 'sw.moveHint';
+let hintEl = null, hintTimer = 0;
+function showHint() {
+  if (room?.key?.split('|')[0] !== 'living' || hintEl?.isConnected) return;
+  try { if (localStorage.getItem(HINT_KEY)) return; } catch { return; }
+  hintEl ||= Object.assign(document.createElement('p'), { className: 'move-hint', role: 'status' });
+  hintEl.innerHTML = matchMedia('(pointer: fine)').matches ? 'Drag or use ← → to look around<br>Click a door to go in' : 'Drag to look around<br>Tap a door to go in';
+  document.body.append(hintEl);
+  clearTimeout(hintTimer); hintTimer = setTimeout(hideHint, 9000);
+}
+function hideHint() {
+  if (!hintEl?.isConnected) return;
+  try { localStorage.setItem(HINT_KEY, '1'); } catch { /* ignore */ }
+  hintEl.classList.add('gone'); const el = hintEl; setTimeout(() => el.remove(), 400);
+}
+
 const ray = new THREE.Raycaster();
+const tmpHit = new THREE.Vector3();
 function tapAt(x, y) {
   if (!room) return;
+  hideHint();
   const r = renderer.domElement.getBoundingClientRect();
   ray.setFromCamera(new THREE.Vector2(((x - r.left) / r.width) * 2 - 1, -((y - r.top) / r.height) * 2 + 1), room.camera);
-  if (room.exit?.hit(ray)) { blurTyping(); location.hash = '#/'; return; }
+  if (room.exit?.group.visible && room.exit.hit(ray)) { blurTyping(); location.hash = '#/'; return; }
   const p = focusName && room.panels?.[focusName];
   if (p) {
     const hit = ray.intersectObject(p.mesh)[0];
@@ -1464,9 +1529,27 @@ function tapAt(x, y) {
     blurTyping();
     return;
   }
+  // The whole object is the target: test a slightly padded box around each door or object
+  // (not just its exact meshes or the sign), and take the nearest one.
+  let best = null, bestD = Infinity;
   for (const s of room.spots) {
-    if (ray.intersectObject(s.mesh, true).length) { walkTo(s, s.href); return; }
+    s.box ||= new THREE.Box3().setFromObject(s.mesh).expandByScalar(0.18);
+    const at = ray.ray.intersectBox(s.box, tmpHit);
+    const d = at ? at.distanceToSquared(ray.ray.origin) : Infinity;
+    if (d < bestD) { bestD = d; best = s; }
   }
+  if (!best) return;
+  yawVel = 0;
+  // Tapping a text field on a screen you aren't zoomed into yet: zoom in and focus it in the
+  // same tap (focus has to happen inside the tap, or phones won't open the keyboard).
+  for (const p of Object.values(room.panels || {})) {
+    const hit = ray.intersectObject(p.mesh)[0];
+    if (!hit?.uv) continue;
+    const cx = hit.uv.x * p.canvas.width, cy = (1 - hit.uv.y) * p.canvas.height;
+    const h = p.hits.findLast(h => h.field && cx >= h.x - 12 && cx <= h.x + h.w + 12 && cy >= h.y - 12 && cy <= h.y + h.h + 12);
+    if (h && best.here) { h.fn(); location.hash = best.href; return; }
+  }
+  walkTo(best, best.href);
 }
 
 function walkTo(spot, href) {
@@ -1497,6 +1580,7 @@ function onScroll() {
   if (stageVisible && !was) wake();
 }
 
+const topInset = () => document.querySelector('.topbar')?.getBoundingClientRect().bottom || 0;
 let focusName = null, snap = true, autoT = 0, heldAt = -1e9;
 const camPos = new THREE.Vector3(), camLook = new THREE.Vector3();
 const want = new THREE.Vector3(), wantLook = new THREE.Vector3();
@@ -1516,10 +1600,14 @@ function frame() {
   } else {
     const f = focusName && room.focus?.[focusName];
     if (f) {
+      // Fill the width of the screen (on a phone), or the height below the top bar, whichever
+      // fits, then nudge the panel down so the floating top bar doesn't cover its top edge.
       const tanv = Math.tan((cam.fov * Math.PI) / 360);
-      const d = Math.max(f.h / 2 / tanv, f.w / 2 / (tanv * cam.aspect)) * 1.04;
-      want.copy(f.center).addScaledVector(f.normal, d);
-      wantLook.copy(f.center);
+      const H = host.clientHeight || innerHeight, free = Math.max(0.5, 1 - topInset() / H);
+      const d = Math.max(f.h * 1.04 / 2 / (tanv * free), f.w * 1.01 / 2 / (tanv * cam.aspect));
+      const shift = (topInset() / H) * d * tanv;
+      want.copy(f.center).addScaledVector(f.normal, d).addScaledVector(f.up, shift);
+      wantLook.copy(f.center).addScaledVector(f.up, shift);
     } else {
       yawUser += yawVel * 0.12; yawVel *= 0.9;
       // the slow look-around holds still for a while after you drag, so it doesn't pull your view away
@@ -1536,7 +1624,8 @@ function frame() {
     cam.position.copy(camPos); cam.lookAt(camLook);
     room.update(reduced ? 0 : dt, t);
   }
-  room.exit?.place(cam);
+  // zoomed onto a screen, the screen has its own back button, so the corner door steps aside
+  if (room.exit) { room.exit.group.visible = !focusName; room.exit.place(cam, topInset() / (host.clientHeight || innerHeight)); }
   renderer.render(room.scene, cam);
   placeSigns();
   document.body.classList.add('world-live');
@@ -1573,7 +1662,7 @@ function disposeRoom() {
 // focus zooms the camera onto something in the room ('monitor' or 'board' in the office).
 export function show(name, theme, focus = null, detail = null) {
   if (!name || theme === 'plain') {
-    stop(); disposeRoom(); focusName = null;
+    stop(); disposeRoom(); focusName = null; hintEl?.remove();
     document.body.classList.remove('world-live', 'world-walking');
     if (signs) signs.innerHTML = '';
     blurTyping();
@@ -1592,17 +1681,22 @@ export function show(name, theme, focus = null, detail = null) {
     room.scene.background = new THREE.Color(night ? 0x1a1410 : 0xf3e6cc);
     room.scene.updateMatrixWorld(true);
     clock = new THREE.Clock();
-    yawUser = 0; yawVel = 0; flying = null; snap = false; autoT = 0; heldAt = -1e9;
-    camPos.copy(room.eye); camLook.set(room.eye.x + Math.sin(room.yawCenter), room.eye.y + room.pitch, room.eye.z + Math.cos(room.yawCenter));
-    signs.innerHTML = room.spots.map((s, i) => `<a class="sign ${s.back ? 'sign-back' : ''} ${s.plaque ? 'sign-3d' : ''}" data-spot="${i}" href="${s.href}"><strong>${s.back ? '← ' : ''}${s.label}</strong>${s.sub ? `<small>${s.sub}</small>` : ''}</a>`).join('');
+    yawUser = room.startYaw || 0; yawVel = 0; flying = null; snap = false; autoT = 0; heldAt = room.startYaw ? performance.now() : -1e9;
+    camPos.copy(room.eye); camLook.set(room.eye.x + Math.sin(room.yawCenter + yawUser), room.eye.y + room.pitch, room.eye.z + Math.cos(room.yawCenter + yawUser));
+    signs.innerHTML = room.spots.map((s, i) => `<a class="sign off ${s.back ? 'sign-back' : ''} ${s.plaque ? 'sign-3d' : ''}" data-spot="${i}" href="${s.href}"><strong>${s.back ? '← ' : ''}${s.label}</strong>${s.sub ? `<small>${s.sub}</small>` : ''}</a>`).join('');
   }
   if ((focus !== focusName || detail !== detailId) && room.panels) { for (const p of Object.values(room.panels)) { p.scroll = 0; p.open = null; } }
+  const fresh = room.key === key && !room.shown;
+  room.shown = true;
   detailId = detail;
   focusName = room.focus?.[focus] ? focus : null;
+  // Opening a deep link (or entering a room straight onto a screen) starts framed on it, no fly-in.
+  if (fresh && focusName) snap = true;
   if (focusName !== 'monitor' && document.activeElement === deskInput) deskInput.blur();
   if (focusName !== 'whiteboard' && document.activeElement === searchInput) searchInput.blur();
   if (focusName !== 'notepad' && document.activeElement === addInput) addInput.blur();
   if (focusName !== 'panel' && document.activeElement === passInput) passInput.blur();
   room.refresh?.();
+  if (focusName) hintEl?.remove(); else showHint();
   resize(); onScroll(); wake();
 }
