@@ -573,7 +573,7 @@ function drawTodo(p, night) {
   if (typing && Math.floor(performance.now() / 500) % 2) { const cx = 48 + (val ? g.measureText(shown).width : 0) + 2; g.fillStyle = accent; g.fillRect(cx, 248, 3, 40); }
   g.fillStyle = accent; rr(g, W - 140, 242, 104, 52, 26); g.fill();
   g.fillStyle = night ? '#1a2238' : '#fffdf3'; g.font = `600 28px ${FONT}`; g.textAlign = 'center'; g.fillText('Add', W - 88, 269); g.textAlign = 'left';
-  p.hits.push({ x: 24, y: 230, w: W - 180, h: 76, fn: () => focusDesk(), keep: true });
+  p.hits.push({ x: 24, y: 230, w: W - 180, h: 76, fn: () => focusDesk(), keep: true, field: true });
   p.hits.push({ x: W - 150, y: 230, w: 126, h: 76, fn: () => submitDesk() });
   let listTop = 318;
   // live preview of what the quick-add understood (day, list, star, repeat)
@@ -760,7 +760,7 @@ function drawGym(p, night) {
   g.fillText(shown, 94, 210);
   if (typing && Math.floor(performance.now() / 500) % 2) { g.fillStyle = blue; g.fillRect(94 + (val ? g.measureText(shown).width : 0) + 2, 190, 3, 38); }
   if (val) { g.fillStyle = soft; g.font = `600 30px ${FONT}`; g.fillText('×', W - 66, 208); p.hits.push({ x: W - 96, y: 176, w: 72, h: 66, fn: () => { searchInput.value = ''; } }); }
-  p.hits.push({ x: 24, y: 176, w: W - 120, h: 66, fn: () => focusSearch(), keep: true });
+  p.hits.push({ x: 24, y: 176, w: W - 120, h: 66, fn: () => focusSearch(), keep: true, field: true });
   // filter chips (wrap)
   const cats = ['All', 'Favorites', ...[...new Set(all.map(i => i.focus || 'Other'))].sort()];
   if (!cats.includes(gymState.filter)) gymState.filter = 'All';
@@ -856,7 +856,7 @@ function drawAdd(p, night) {
   if (!val) caretText(g, 110, 190, '', 'Paste a TikTok, Instagram, YouTube or recipe link…', addInput, W - 160, ink, soft);
   else lines.forEach((l, i) => { g.fillStyle = ink; g.fillText(l, 110, 186 + i * 36); });
   if (val && document.activeElement === addInput && Math.floor(performance.now() / 500) % 2) { const last = lines[lines.length - 1]; g.fillStyle = green; g.fillRect(110 + g.measureText(last).width + 2, 168 + (lines.length - 1) * 36, 3, 34); }
-  p.hits.push({ x: 90, y: 150, w: W - 120, h: 130, fn: () => focusTyper(addInput), keep: true });
+  p.hits.push({ x: 90, y: 150, w: W - 120, h: 130, fn: () => focusTyper(addInput), keep: true, field: true });
   let y = 300;
   if (st.error) { g.fillStyle = st.needsText ? green : red; g.font = `400 22px ${FONT}`; g.textBaseline = 'alphabetic'; wrap(g, st.error, W - 130, 3).forEach((l, i) => g.fillText(l, 92, y + 20 + i * 30)); y += 24 + Math.min(3, wrap(g, st.error, W - 130, 3).length) * 30; }
   // it's a…
@@ -937,7 +937,7 @@ function drawSettings(p, night) {
     g.fillStyle = '#fffaf0'; rr(g, 30, y, W - 220, 60, 30); g.fill(); g.lineWidth = 3; g.strokeStyle = document.activeElement === passInput ? green : '#d4c19c'; g.stroke();
     g.font = `400 24px ${FONT}`; g.textBaseline = 'middle';
     caretText(g, 54, y + 31, passInput?.value || '', sy.hasPasscode ? 'New passcode' : 'Passcode', passInput, W - 270, ink, soft, true);
-    p.hits.push({ x: 30, y, w: W - 220, h: 60, fn: () => focusTyper(passInput), keep: true });
+    p.hits.push({ x: 30, y, w: W - 220, h: 60, fn: () => focusTyper(passInput), keep: true, field: true });
     pill(p, W - 180, y, 150, 60, sy.hasPasscode ? 'Update' : 'Connect', { fill: green, text: '#fff', fn: () => {
       const inp = fb('form[data-form="passcode"] input[name="passcode"]'); const form = fb('form[data-form="passcode"]');
       if (!inp || !form || !passInput.value) { focusTyper(passInput); return; }
@@ -1027,7 +1027,7 @@ function fieldBox(p, x, y, w, h, el, placeholder, { multiline = false, font = 28
     g.fillStyle = '#3f6e3c'; g.fillRect(x + 20 + (val ? Math.min(g.measureText(last).width, w - 44) : 0) + 2, y + 18 + (val ? lines.length - 1 : 0) * lh, 3, font + 8);
   }
   g.restore();
-  if (el) p.hits.push({ x, y, w, h, keep: true, fn: () => { el.focus({ preventScroll: true }); try { el.setSelectionRange(el.value.length, el.value.length); } catch { /* ignore */ } } });
+  if (el) p.hits.push({ x, y, w, h, keep: true, field: true, fn: () => { el.focus({ preventScroll: true }); try { el.setSelectionRange(el.value.length, el.value.length); } catch { /* ignore */ } } });
 }
 
 // A note being written, on a big sheet pinned to the corkboard.
@@ -1420,6 +1420,8 @@ function ensure() {
   document.addEventListener('pointerdown', e => {
     if (!room || !e.target.closest?.('.room-stage') || e.target.closest('a,button,input,select,textarea')) return;
     down = { x: e.clientX, y: e.clientY, lx: e.clientX, ly: e.clientY, t: performance.now() }; heldAt = performance.now();
+    // Stop the compatibility mousedown from focusing <main>, which would steal focus from a field a tap just focused.
+    e.preventDefault();
   });
   document.addEventListener('pointermove', e => {
     if (!down) return;
@@ -1508,7 +1510,18 @@ function tapAt(x, y) {
     const d = at ? at.distanceToSquared(ray.ray.origin) : Infinity;
     if (d < bestD) { bestD = d; best = s; }
   }
-  if (best) { yawVel = 0; walkTo(best, best.href); }
+  if (!best) return;
+  yawVel = 0;
+  // Tapping a text field on a screen you aren't zoomed into yet: zoom in and focus it in the
+  // same tap (focus has to happen inside the tap, or phones won't open the keyboard).
+  for (const p of Object.values(room.panels || {})) {
+    const hit = ray.intersectObject(p.mesh)[0];
+    if (!hit?.uv) continue;
+    const cx = hit.uv.x * p.canvas.width, cy = (1 - hit.uv.y) * p.canvas.height;
+    const h = p.hits.findLast(h => h.field && cx >= h.x - 12 && cx <= h.x + h.w + 12 && cy >= h.y - 12 && cy <= h.y + h.h + 12);
+    if (h && best.here) { h.fn(); location.hash = best.href; return; }
+  }
+  walkTo(best, best.href);
 }
 
 function walkTo(spot, href) {
