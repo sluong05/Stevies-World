@@ -859,3 +859,16 @@ body:not([data-room="living"]) .move-hint, body[data-screen=""] .move-hint { dis
 /* Kitchen: a search button in the top bar reaches the chalkboard from the shelf or an open cookbook. */
 .search-btn { display: none; }
 body.in-kitchen .search-btn { display: grid; }
+
+/* Recipe page: a shorter hero on wide screens, numbers up with the time and servings, tick-off ingredients */
+@media (min-width: 640px) { .item-top.has-photo { aspect-ratio: auto; height: min(46vh, 420px); } }
+.facts b { font-weight: 700; }
+.facts span.scaler { display: inline-flex; align-items: center; gap: 6px; padding: 0; background: none; box-shadow: none; }
+.scale-btn { width: 30px; height: 30px; border-radius: 50%; border: 1.5px solid var(--line); background: var(--card); color: var(--ink); font-size: 18px; line-height: 1; cursor: pointer; display: grid; place-items: center; padding: 0; }
+.scale-btn:disabled { opacity: .4; cursor: default; }
+[data-theme="retro"] .scale-btn { border-radius: 0; box-shadow: var(--bevel-out); border: 0; }
+.ingredients.checkable li { padding: 0; }
+.ingredients.checkable label { display: flex; align-items: flex-start; gap: 12px; padding: 11px 2px; cursor: pointer; }
+.ingredients.checkable input { width: 22px; height: 22px; margin: 1px 0 0; flex: none; accent-color: var(--accent); }
+.ingredients.checkable li.got span { text-decoration: line-through; color: var(--ink-soft); }
+.scaled-note { font-size: 13px; font-weight: 500; color: var(--ink-soft); margin-left: 6px; }

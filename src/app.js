@@ -204,6 +204,7 @@ document.addEventListener('click', async event => {
   if (['theme', 'save', 'filter', 'quick', 'pick', 'paste-link', 'clipboard', 'back', 'tag', 'revert', 'delete', 'remove-photo', 'mode-next', 'mode-prev', 'toggle-ingredients', 'timer-start', 'timer-stop', 'sync-now', 'forget-pass', 'export', 'task-toggle', 'task-star', 'step-toggle', 'set-due', 'todo-filter', 'clear-done'].includes(action)) event.preventDefault();
   switch (action) {
     case 'reload-app': location.reload(); break;
+    case 'serves': { const it = store.getItem(el.dataset.id); if (!it) break; const n = Math.max(1, Math.min(48, (ui.serves.get(it.id) || it.servings || 1) + Number(el.dataset.delta))); if (n === it.servings) ui.serves.delete(it.id); else ui.serves.set(it.id, n); render({ keepScroll: true }); break; }
     case 'save': { const on = await store.toggleSaved(el.dataset.id); toast(on ? 'Added to favorites' : 'Removed from favorites'); break; }
     case 'task-toggle': {
       const row = el.closest('.task-row');
@@ -273,6 +274,7 @@ document.addEventListener('input', event => {
 });
 
 document.addEventListener('change', async event => {
+  if (event.target.dataset?.action === 'got') { const { id, index } = event.target.dataset; const set = ui.got.get(id) || new Set(); if (event.target.checked) set.add(Number(index)); else set.delete(Number(index)); ui.got.set(id, set); event.target.closest('li')?.classList.toggle('got', event.target.checked); return; }
   const el = event.target;
   const action = el.dataset.action;
   if (action === 'sort') { ui.sort[el.dataset.key] = el.value; render({ keepScroll: true }); }
