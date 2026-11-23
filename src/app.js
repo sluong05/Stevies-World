@@ -5,7 +5,7 @@ import { applyTheme, setTheme, setAutoNight } from './theme.js';
 import { homeView, listView, itemView, officeView, ui } from './views.js';
 import { editing, addView, editorView, startNew, startEdit, draftFromText, importFromLink, firstUrl, readForm, switchType, updatePreview, setPhoto, saveDraft, removeItem } from './editor.js';
 import { mode, modeView, enterMode, exitMode, startTimer, stopTimer } from './modes.js';
-import { settingsView } from './settings.js';
+import { settingsView, startHome, setStartHome } from './settings.js';
 import { dueLabel } from '../shared/tasks.js';
 import { todoView, todoUi, quickPreview, toggleTask, toggleStar, toggleStep, quickAdd, clearDone } from './todo.js';
 
@@ -59,7 +59,8 @@ function render({ keepScroll = false } = {}) {
     import('./library.js').then(m => { libraryMod = m; if (parseRoute().parts[0] === 'library') m.mount($('#library'), parseRoute().parts[1] || ''); });
     return;
   }
-  if (!a) { html = homeView(); tab = 'home'; }
+  if (!a) { html = homeView(); tab = 'house'; }
+  else if (a === 'home') { html = homeView(); tab = 'home'; }
   else if (a === 'recipes') { html = listView('recipe'); tab = 'recipes'; }
   else if (a === 'workouts') { html = listView('workout'); tab = 'workouts'; }
   else if (a === 'notes') { html = listView('note'); tab = 'notes'; }
@@ -275,6 +276,7 @@ document.addEventListener('change', async event => {
   const action = el.dataset.action;
   if (action === 'sort') { ui.sort[el.dataset.key] = el.value; render({ keepScroll: true }); }
   if (action === 'cuisine') { ui.cuisine[el.dataset.key] = el.value; render({ keepScroll: true }); }
+  if (action === 'start-home') { setStartHome(el.checked); render({ keepScroll: true }); }
   if (action === 'auto-night') { setAutoNight(el.checked); render({ keepScroll: true }); }
   if (action === 'photo' && el.files?.[0]) {
     readForm(el.form);
@@ -341,6 +343,8 @@ async function handleIncoming() {
 }
 
 await store.init();
+// Settings › "Start on the home screen": open the flat home screen instead of the living room.
+if ((!location.hash || location.hash === '#/' || location.hash === '#') && startHome() && !new URLSearchParams(location.search).get('add')) history.replaceState(null, '', '#/home');
 render();
 handleIncoming();
 

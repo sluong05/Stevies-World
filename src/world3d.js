@@ -12,6 +12,7 @@ import { toast } from './ui.js';
 import { editing } from './editor.js';
 import { mode, startTimer, stopTimer, addTime, parseSeconds, markDone, lastDone, agoLabel } from './modes.js';
 import { THEMES, chosenTheme, autoNight } from './theme.js';
+import { startHome } from './settings.js';
 
 const reduced = typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches;
 let renderer = null, failed = false;
@@ -918,6 +919,13 @@ function drawSettings(p, night) {
   g.fillStyle = ink; g.font = `400 23px ${FONT}`; g.textBaseline = 'middle';
   wrap(g, 'Firefly night when my phone is in dark mode', W - 150, 2).forEach((l, i) => g.fillText(l, 120, y + 12 + i * 28));
   p.hits.push({ x: 24, y: y - 6, w: W - 48, h: 60, fn: () => press('[data-action="auto-night"]') });
+  const sh = startHome();
+  y += 64;
+  g.fillStyle = sh ? green : '#cbb894'; rr(g, 30, y, 74, 40, 20); g.fill();
+  g.fillStyle = '#fff'; g.beginPath(); g.arc(sh ? 84 : 50, y + 20, 15, 0, 7); g.fill();
+  g.fillStyle = ink; g.font = `400 23px ${FONT}`; g.textBaseline = 'middle';
+  wrap(g, 'Start on the home screen instead of the living room', W - 150, 2).forEach((l, i) => g.fillText(l, 120, y + 12 + i * 28));
+  p.hits.push({ x: 24, y: y - 6, w: W - 48, h: 60, fn: () => press('[data-action="start-home"]') });
   // sync
   y += 100; section('Sync', y); y += 44;
   const sy = syncState();

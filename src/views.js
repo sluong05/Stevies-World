@@ -231,10 +231,12 @@ export function itemView(id) {
 
 // ---------- the house ----------
 export const DOORS = [
+  ['#/todo', 'To-do', 'Office monitor', 'checkbox'],
   ['#/recipes', 'Kitchen', 'Recipes', 'bowl'],
   ['#/workouts', 'Gym', 'Workouts', 'dumbbell'],
+  ['#/notes', 'Notes', 'Office corkboard', 'note'],
   ['#/library', 'Library', 'Journal', 'book'],
-  ['#/office', 'Office', 'To-do & Notes', 'checkbox'],
+  ['#/', 'Living room', 'The 3D house', 'home'],
 ];
 export function doorList() {
   return `<nav class="door-list" aria-label="Rooms">${DOORS.map(([href, room, sub, ic]) => `<a class="door-chip" href="${href}">${icon(ic)}<span><strong>${room}</strong><small>${sub}</small></span></a>`).join('')}</nav>`;
