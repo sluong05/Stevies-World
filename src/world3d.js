@@ -1671,8 +1671,12 @@ export function show(name, theme, focus = null, detail = null) {
     signs.innerHTML = room.spots.map((s, i) => `<a class="sign ${s.back ? 'sign-back' : ''} ${s.plaque ? 'sign-3d' : ''}" data-spot="${i}" href="${s.href}"><strong>${s.back ? '← ' : ''}${s.label}</strong>${s.sub ? `<small>${s.sub}</small>` : ''}</a>`).join('');
   }
   if ((focus !== focusName || detail !== detailId) && room.panels) { for (const p of Object.values(room.panels)) { p.scroll = 0; p.open = null; } }
+  const fresh = room.key === key && !room.shown;
+  room.shown = true;
   detailId = detail;
   focusName = room.focus?.[focus] ? focus : null;
+  // Opening a deep link (or entering a room straight onto a screen) starts framed on it, no fly-in.
+  if (fresh && focusName) snap = true;
   if (focusName !== 'monitor' && document.activeElement === deskInput) deskInput.blur();
   if (focusName !== 'whiteboard' && document.activeElement === searchInput) searchInput.blur();
   if (focusName !== 'notepad' && document.activeElement === addInput) addInput.blur();
