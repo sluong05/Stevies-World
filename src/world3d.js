@@ -497,7 +497,8 @@ function gym(night) {
 function focusOf(mesh) {
   const center = mesh.getWorldPosition(new THREE.Vector3());
   const normal = new THREE.Vector3(0, 0, 1).applyQuaternion(mesh.getWorldQuaternion(new THREE.Quaternion()));
-  return { center, normal, w: mesh.geometry.parameters.width, h: mesh.geometry.parameters.height, mesh };
+  const up = new THREE.Vector3(0, 1, 0).applyQuaternion(mesh.getWorldQuaternion(new THREE.Quaternion()));
+  return { center, normal, up, w: mesh.geometry.parameters.width, h: mesh.geometry.parameters.height, mesh };
 }
 
 // ---------- canvas panels: flat screens and papers drawn with 2D canvas, shown in 3D ----------
@@ -1552,6 +1553,7 @@ function onScroll() {
   if (stageVisible && !was) wake();
 }
 
+const topInset = () => document.querySelector('.topbar')?.getBoundingClientRect().bottom || 0;
 let focusName = null, snap = true, autoT = 0, heldAt = -1e9;
 const camPos = new THREE.Vector3(), camLook = new THREE.Vector3();
 const want = new THREE.Vector3(), wantLook = new THREE.Vector3();
@@ -1571,10 +1573,14 @@ function frame() {
   } else {
     const f = focusName && room.focus?.[focusName];
     if (f) {
+      // Fill the width of the screen (on a phone), or the height below the top bar, whichever
+      // fits, then nudge the panel down so the floating top bar doesn't cover its top edge.
       const tanv = Math.tan((cam.fov * Math.PI) / 360);
-      const d = Math.max(f.h / 2 / tanv, f.w / 2 / (tanv * cam.aspect)) * 1.04;
-      want.copy(f.center).addScaledVector(f.normal, d);
-      wantLook.copy(f.center);
+      const H = host.clientHeight || innerHeight, free = Math.max(0.5, 1 - topInset() / H);
+      const d = Math.max(f.h * 1.04 / 2 / (tanv * free), f.w * 1.01 / 2 / (tanv * cam.aspect));
+      const shift = (topInset() / H) * d * tanv;
+      want.copy(f.center).addScaledVector(f.normal, d).addScaledVector(f.up, shift);
+      wantLook.copy(f.center).addScaledVector(f.up, shift);
     } else {
       yawUser += yawVel * 0.12; yawVel *= 0.9;
       // the slow look-around holds still for a while after you drag, so it doesn't pull your view away
