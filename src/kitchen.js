@@ -163,10 +163,25 @@ function placeCounterTools() {
   S.chalkGroup.scale.setScalar(k);
   // Hug the screen edges on a phone, but on a wide screen stay beside the shelves instead of drifting off to the far edges.
   const reach = Math.min(halfW, 0.86);
-  S.chalkGroup.position.set(S.camX - reach + 0.2 * k + 0.03, COUNTER_Y + 0.115 * k, zFront);
+  // Step inward, toward the middle of the view, off the sink, the stove or the fridge, so the
+  // board never covers the pot and the box never ends up inside the fridge.
+  const clear = (x, hw, dir) => {
+    for (let i = 0; i < 3; i++) {
+      const b = (S.blockers || []).find(([l, r]) => x + hw > l && x - hw < r);
+      if (!b) break;
+      x = dir > 0 ? b[1] + hw + 0.02 : b[0] - hw - 0.02;
+    }
+    return x;
+  };
+  const chalkX = clear(S.camX - reach + 0.2 * k + 0.03, 0.19 * k, 1);
+  S.chalkGroup.position.set(chalkX, COUNTER_Y + 0.115 * k, zFront);
   S.boxGroup.scale.setScalar(k);
-  S.boxGroup.position.set(S.camX + reach - 0.15 * k - 0.03, COUNTER_Y, zFront - 0.02);
-  S.chalkGroup.visible = S.boxGroup.visible = !S.open;
+  const boxX = clear(S.camX + reach - 0.15 * k - 0.03, 0.15 * k, -1);
+  S.boxGroup.position.set(boxX, COUNTER_Y, zFront - 0.02);
+  // In the rare spot where both had to step in and would now overlap, keep the board and hide the box.
+  S.boxGroup.userData.squeezed = boxX - 0.15 * k < chalkX + 0.19 * k;
+  S.chalkGroup.visible = !S.open;
+  S.boxGroup.visible = !S.open && !S.boxGroup.userData.squeezed;
 }
 
 function chalkLine(g, text, x, y, size = 34, color = '#f4f1e8', font = '"SW Macrons", "Kiwi Maru", Georgia, serif') {
@@ -363,6 +378,8 @@ function buildScene() {
   const left = bays[0].x - BAY_STEP / 2, right = bays[bays.length - 1].x + BAY_STEP / 2;
   const sinkX = left - 0.55, fridgeX = right + 0.42;
   const runL = sinkX - 0.6, runR = fridgeX + 0.45, runW = runR - runL, runC = (runL + runR) / 2;
+  // Spots on the worktop the chalkboard and recipe box must not stand in: the sink, the stove and the fridge.
+  S.blockers = [[sinkX - 0.36, sinkX + 0.36], [sx - STOVE_W / 2, sx + STOVE_W / 2], [fridgeX - 0.32, Infinity]];
 
   const add = (geo, mat, x, y, z, shadows = true, parent = scene) => { const m = new THREE.Mesh(geo, mat); m.position.set(x, y, z); m.castShadow = shadows; m.receiveShadow = true; parent.add(m); return m; };
   const std = (color, extra) => new THREE.MeshStandardMaterial({ color, roughness: 0.6, ...extra });
@@ -415,7 +432,7 @@ function buildScene() {
   add(new THREE.CylinderGeometry(0.11, 0.1, 0.06, 24), std('#3a3a3a', { metalness: 0.6 }), 0.2, COUNTER_Y + 0.04, -0.12, true, range);
   const hood = add(new THREE.CylinderGeometry(0.18, STOVE_W / 2, 0.32, 4, 1), std('#c9c2b4', { metalness: 0.5, roughness: 0.35 }), 0, shelfY(0) + 0.05, -0.08, true, range);
   hood.rotation.y = Math.PI / 4; hood.scale.z = 0.7;
-  add(new THREE.BoxGeometry(0.3, 0.6, 0.3), std('#c9c2b4', { metalness: 0.5, roughness: 0.35 }), 0, shelfY(0) + 0.5, -0.12, false, range);
+  add(new THREE.BoxGeometry(0.3, 2, 0.24), std('#c9c2b4', { metalness: 0.5, roughness: 0.35 }), 0, shelfY(0) + 1.15, -0.15, false, range); // chimney, up through the ceiling so the hood doesn't float
   const stoveLight = new THREE.PointLight('#ff9a4d', 1.4, 2.4, 1.6); stoveLight.position.set(sx, COUNTER_Y + 0.25, 0.3); scene.add(stoveLight);
   // steam
   const N = 24, sp = new Float32Array(N * 3), rs = rand('steam');
