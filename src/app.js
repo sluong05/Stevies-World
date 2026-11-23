@@ -216,7 +216,7 @@ document.addEventListener('click', async event => {
     case 'set-due': { const input = el.form?.querySelector('input[name="due"]'); if (input) input.value = el.dataset.value; break; }
     case 'clear-done':
       if (el.dataset.confirm) { const n = await clearDone(); toast(`Cleared ${n}`); }
-      else { el.dataset.confirm = '1'; el.lastChild.textContent = 'Tap again to clear'; el.classList.add('btn-danger', 'confirming'); setTimeout(() => { if (el.isConnected) { delete el.dataset.confirm; render({ keepScroll: true }); } }, 4000); }
+      else { el.dataset.confirm = '1'; el.lastChild.textContent = 'Tap again to clear'; el.classList.add('btn-danger', 'confirming'); setTimeout(() => { if (el.isConnected) { delete el.dataset.confirm; render({ keepScroll: true }); } }, 8000); }
       break;
     case 'filter': ui.filters[el.dataset.key] = el.dataset.value; render({ keepScroll: true }); break;
     case 'quick': ui.quick[el.dataset.key] = ui.quick[el.dataset.key] === el.dataset.value ? '' : el.dataset.value; render({ keepScroll: true }); break;
@@ -247,7 +247,7 @@ document.addEventListener('click', async event => {
     case 'remove-photo': readForm(el.form); delete editing.draft.photo; render({ keepScroll: true }); break;
     case 'delete':
       if (el.dataset.confirm) { const d = editing.draft; await removeItem(el.dataset.id); location.hash = `#/${{ recipe: 'recipes', workout: 'workouts', note: 'notes' }[d?.type] || ''}`; }
-      else { el.dataset.confirm = '1'; el.lastChild.textContent = 'Tap again to delete'; el.classList.add('confirming'); setTimeout(() => { if (el.isConnected) { delete el.dataset.confirm; el.lastChild.textContent = 'Delete'; el.classList.remove('confirming'); } }, 4000); }
+      else { el.dataset.confirm = '1'; el.lastChild.textContent = 'Tap again to delete'; el.classList.add('confirming'); setTimeout(() => { if (el.isConnected) { delete el.dataset.confirm; el.lastChild.textContent = 'Delete'; el.classList.remove('confirming'); } }, 8000); }
       break;
     case 'mode-next': mode.index++; stopTimer(); mode.timerLeft = 0; mode.timerTotal = 0; render({ keepScroll: true }); break;
     case 'mode-prev': mode.index--; stopTimer(); mode.timerLeft = 0; mode.timerTotal = 0; render({ keepScroll: true }); break;

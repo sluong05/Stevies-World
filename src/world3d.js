@@ -1008,6 +1008,15 @@ function drawWorkout(p, it) {
 const typingIn = () => document.activeElement?.closest?.('.room-fallback') ? document.activeElement : null;
 document.addEventListener('input', e => { if (e.target.closest?.('.room-fallback')) for (const p of Object.values(room?.panels || {})) p.dirty = true; });
 document.addEventListener('focusout', () => setTimeout(() => { for (const p of Object.values(room?.panels || {})) p.dirty = true; }, 0));
+// Any change to the hidden DOM behind a screen (a button relabelled, an attribute flipped, a list
+// re-rendered) redraws the 3D screens on the next frame.
+if (typeof MutationObserver === 'function') {
+  new MutationObserver(muts => {
+    if (!room?.panels || !muts.some(m => m.target.closest?.('.room-fallback') || m.target.parentElement?.closest('.room-fallback') || [...m.addedNodes].some(n => n.classList?.contains('room-fallback')))) return;
+    for (const p of Object.values(room.panels)) p.dirty = true;
+    wake();
+  }).observe(document.getElementById('main'), { subtree: true, childList: true, characterData: true, attributes: true });
+}
 
 function fieldBox(p, x, y, w, h, el, placeholder, { multiline = false, font = 28 } = {}) {
   const { g } = p;
@@ -1064,7 +1073,7 @@ function drawNoteEditor(p) {
   y += 56;
   const del = fb('form[data-form="editor"] [data-action="delete"]');
   fieldBox(p, 48, y, W - 96, H - y - (del ? 130 : 60), body, 'Write anything. “## ” makes a heading, “- ” a list.', { multiline: true, font: 26 });
-  if (del) pill(p, 48, H - 112, 200, 54, 'Delete', { stroke: '#c4513f', text: '#c4513f', fn: () => del.click() });
+  if (del) pill(p, 48, H - 112, 200, 54, del.dataset.confirm ? 'Tap again' : 'Delete', del.dataset.confirm ? { fill: '#c4513f', stroke: '#c4513f', text: '#fff', fn: () => del.click() } : { stroke: '#c4513f', text: '#c4513f', fn: () => del.click() });
   p.maxScroll = 0;
   p.tex.needsUpdate = true;
 }
@@ -1109,7 +1118,7 @@ function drawWorkoutEditor(p) {
   g.fillStyle = soft; g.font = `400 20px ${FONT}`; g.fillText('One per line: “Squat 3x10 rest 60s”. “Main:” starts a section.', 28, y + 18); y += 30;
   const del = fb('form[data-form="editor"] [data-action="delete"]');
   fieldBox(p, 24, y, W - 48, H - y - (del ? 100 : 30), ef('exercises'), 'Warm-up:\nBike 5 min', { multiline: true, font: 24 });
-  if (del) pill(p, 24, H - 84, 180, 56, 'Delete', { stroke: '#c4513f', text: '#c4513f', fn: () => del.click() });
+  if (del) pill(p, 24, H - 84, 180, 56, del.dataset.confirm ? 'Tap again' : 'Delete', del.dataset.confirm ? { fill: '#c4513f', stroke: '#c4513f', text: '#fff', fn: () => del.click() } : { stroke: '#c4513f', text: '#c4513f', fn: () => del.click() });
   p.maxScroll = 0;
   p.tex.needsUpdate = true;
 }
@@ -1141,7 +1150,7 @@ function drawTaskEditor(p, night) {
   const rest = H - y - (del ? 80 : 20), half = (rest - 12) / 2;
   fieldBox(p, 24, y, W - 48, half, ef('steps'), 'Steps, one per line (optional)', { multiline: true, font: 22 }); y += half + 12;
   fieldBox(p, 24, y, W - 48, half, ef('note'), 'Notes: details, who to ask…', { multiline: true, font: 22 });
-  if (del) pill(p, 24, H - 66, 160, 50, 'Delete', { stroke: '#c4513f', text: '#c4513f', fn: () => del.click() });
+  if (del) pill(p, 24, H - 66, 160, 50, del.dataset.confirm ? 'Tap again' : 'Delete', del.dataset.confirm ? { fill: '#c4513f', stroke: '#c4513f', text: '#fff', fn: () => del.click() } : { stroke: '#c4513f', text: '#c4513f', fn: () => del.click() });
   p.maxScroll = 0;
   p.tex.needsUpdate = true;
 }
