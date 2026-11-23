@@ -199,6 +199,7 @@ async function readClipboard() {
 document.addEventListener('click', async event => {
   const el = event.target.closest('[data-action]');
   if (!el) return;
+  if (el.dataset.action === 'kitchen-search') { if (!kitchenMod?.openSearch()) location.hash = '#/recipes'; return; }
   const action = el.dataset.action;
   if (['theme', 'save', 'filter', 'quick', 'pick', 'paste-link', 'clipboard', 'back', 'tag', 'revert', 'delete', 'remove-photo', 'mode-next', 'mode-prev', 'toggle-ingredients', 'timer-start', 'timer-stop', 'sync-now', 'forget-pass', 'export', 'task-toggle', 'task-star', 'step-toggle', 'set-due', 'todo-filter', 'clear-done'].includes(action)) event.preventDefault();
   switch (action) {

@@ -74,6 +74,16 @@ export function route(bookKey, recipeId = '') {
   else openBook(b, recipeId);
 }
 
+/** The top bar's search button: from the shelf or an open cookbook, zoom onto the chalkboard
+ *  and focus its search line in the same tap (so the phone keyboard opens). */
+export function openSearch() {
+  if (!S) return false;
+  S.searchInput.focus({ preventScroll: true }); S.caretOn = true;
+  if (S.open) { history.replaceState(null, '', '#/recipes'); closeBook().then(() => { if (S) { zoomTo('chalk'); S.searchInput.focus({ preventScroll: true }); drawChalk(); } }); }
+  else { zoomTo('chalk'); drawChalk(); }
+  return true;
+}
+
 /** Recipes or favorites changed (here, or synced from another device). */
 export function refresh() {
   if (!S) return;
@@ -135,14 +145,20 @@ function makeCounterTools() {
 
 function placeCounterTools() {
   if (!S.chalkGroup) return;
-  const cam = S.camera, zFront = S.cabFront - 0.13;
-  const depth = (DEPTH / 2 + S.dist - zFront) || 1; // from the shelf view, so zooming in doesn't move them
+  const cam = S.camera;
+  // Stand them at the front of the worktop, or further back when the front edge would be cut off by
+  // the bottom of the screen (wide screens frame the shelves, not the worktop).
+  const camZ = DEPTH / 2 + S.dist, camY = (shelfY(0) + 0.5 + COUNTER_Y - 0.12) / 2 - 0.03 + 0.12;
+  const tanV = Math.tan(THREE.MathUtils.degToRad(cam.fov / 2)), tilt = 0.12 / camZ;
+  const fitDepth = (camY - COUNTER_Y - 0.03) / (tanV + tilt);
+  const zFront = Math.max(Math.min(S.cabFront - 0.13, camZ - fitDepth), S.cabFront - 0.62 + 0.14); // 0.62: worktop depth
+  const depth = (camZ - zFront) || 1; // from the shelf view, so zooming in doesn't move them
   const halfW = Math.tan(THREE.MathUtils.degToRad(cam.fov / 2)) * cam.aspect * depth;
   const k = Math.min(1, halfW / 0.42);
   S.chalkGroup.scale.setScalar(k);
   S.chalkGroup.position.set(S.camX - halfW + 0.2 * k + 0.02, COUNTER_Y + 0.115 * k, zFront);
   S.boxGroup.scale.setScalar(k);
-  S.boxGroup.position.set(S.camX + halfW - 0.13 * k - 0.02, COUNTER_Y, zFront);
+  S.boxGroup.position.set(S.camX + halfW - 0.16 * k - 0.02, COUNTER_Y, zFront);
   S.chalkGroup.visible = S.boxGroup.visible = !S.open;
 }
 

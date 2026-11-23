@@ -847,3 +847,7 @@ body:not([data-room="living"]) .move-hint, body[data-screen=""] .move-hint { dis
    when a room name is showing so home, add and settings always fit. */
 .brand span { white-space: nowrap; }
 @media (max-width: 420px) { .topbar:has(.room-name:not(:empty)) .brand span { display: none; } }
+
+/* Kitchen: a search button in the top bar reaches the chalkboard from the shelf or an open cookbook. */
+.search-btn { display: none; }
+body.in-kitchen .search-btn { display: grid; }
