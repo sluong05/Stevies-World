@@ -246,7 +246,7 @@ document.addEventListener('click', async event => {
     case 'switch-type': switchType(el.form, el.value); render({ keepScroll: true }); break;
     case 'remove-photo': readForm(el.form); delete editing.draft.photo; render({ keepScroll: true }); break;
     case 'delete':
-      if (el.dataset.confirm) { const d = editing.draft; await removeItem(el.dataset.id); location.hash = `#/${{ recipe: 'recipes', workout: 'workouts', note: 'notes' }[d?.type] || ''}`; }
+      if (el.dataset.confirm) { const d = editing.draft; await removeItem(el.dataset.id); location.hash = `#/${{ recipe: 'recipes', workout: 'workouts', note: 'notes', task: 'todo' }[d?.type] || ''}`; }
       else { el.dataset.confirm = '1'; el.lastChild.textContent = 'Tap again to delete'; el.classList.add('confirming'); setTimeout(() => { if (el.isConnected) { delete el.dataset.confirm; el.lastChild.textContent = 'Delete'; el.classList.remove('confirming'); } }, 8000); }
       break;
     case 'mode-next': mode.index++; stopTimer(); mode.timerLeft = 0; mode.timerTotal = 0; render({ keepScroll: true }); break;
