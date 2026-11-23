@@ -412,7 +412,13 @@ function buildScene() {
   }
   const topTex = woodTex('#b98a56', '#7a5230', 512, 64, 40);
   topTex.wrapS = THREE.RepeatWrapping; topTex.repeat.set(runW, 1);
-  add(new THREE.BoxGeometry(runW + 0.04, 0.045, CAB_D + 0.03), std('#ffffff', { map: topTex, roughness: 0.5 }), runC, COUNTER_Y - 0.0225, cabZ + 0.015);
+  // The worktop stops either side of the stove: one slab running under the range put both tops at the
+  // same height, and they flickered through each other as the view moved.
+  const gapL = sx - STOVE_W / 2 + 0.025, gapR = sx + STOVE_W / 2 - 0.025;
+  for (const [l, r] of [[runL - 0.02, gapL], [gapR, runR + 0.02]]) {
+    const piece = topTex.clone(); piece.needsUpdate = true; piece.repeat.set(r - l, 1);
+    add(new THREE.BoxGeometry(r - l, 0.045, CAB_D + 0.03), std('#ffffff', { map: piece, roughness: 0.5 }), (l + r) / 2, COUNTER_Y - 0.0225, cabZ + 0.015);
+  }
 
   // The stove: range, burners, a simmering pot and a hood.
   const range = new THREE.Group(); range.position.set(sx, 0, cabZ); scene.add(range);
