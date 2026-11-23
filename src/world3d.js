@@ -1419,10 +1419,13 @@ function ensure() {
   let down = null;
   document.addEventListener('pointerdown', e => {
     if (!room || !e.target.closest?.('.room-stage') || e.target.closest('a,button,input,select,textarea')) return;
-    down = { x: e.clientX, y: e.clientY, lx: e.clientX, ly: e.clientY, t: performance.now() };
+    down = { x: e.clientX, y: e.clientY, lx: e.clientX, ly: e.clientY, t: performance.now() }; heldAt = performance.now();
   });
   document.addEventListener('pointermove', e => {
     if (!down) return;
+    // ignore finger jitter, so a tap doesn't also turn the camera away from what was tapped
+    if (!down.moved && Math.hypot(e.clientX - down.x, e.clientY - down.y) < 14) return;
+    down.moved = true;
     const dx = (e.clientX - down.lx) / innerWidth, dy = e.clientY - down.ly;
     down.lx = e.clientX; down.ly = e.clientY;
     const p = focusName && room.panels?.[focusName];
@@ -1431,7 +1434,7 @@ function ensure() {
     wake();
   });
   document.addEventListener('pointerup', e => {
-    if (down && Math.hypot(e.clientX - down.x, e.clientY - down.y) < 10 && performance.now() - down.t < 450) tapAt(e.clientX, e.clientY);
+    if (down && !down.moved && performance.now() - down.t < 700) tapAt(e.clientX, e.clientY);
     down = null;
   });
   document.addEventListener('pointercancel', () => { down = null; });
@@ -1475,6 +1478,7 @@ function hideHint() {
 }
 
 const ray = new THREE.Raycaster();
+const tmpHit = new THREE.Vector3();
 function tapAt(x, y) {
   if (!room) return;
   hideHint();
@@ -1495,9 +1499,16 @@ function tapAt(x, y) {
     blurTyping();
     return;
   }
+  // The whole object is the target: test a slightly padded box around each door or object
+  // (not just its exact meshes or the sign), and take the nearest one.
+  let best = null, bestD = Infinity;
   for (const s of room.spots) {
-    if (ray.intersectObject(s.mesh, true).length) { walkTo(s, s.href); return; }
+    s.box ||= new THREE.Box3().setFromObject(s.mesh).expandByScalar(0.18);
+    const at = ray.ray.intersectBox(s.box, tmpHit);
+    const d = at ? at.distanceToSquared(ray.ray.origin) : Infinity;
+    if (d < bestD) { bestD = d; best = s; }
   }
+  if (best) { yawVel = 0; walkTo(best, best.href); }
 }
 
 function walkTo(spot, href) {
