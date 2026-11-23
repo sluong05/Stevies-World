@@ -1668,7 +1668,7 @@ export function show(name, theme, focus = null, detail = null) {
     clock = new THREE.Clock();
     yawUser = room.startYaw || 0; yawVel = 0; flying = null; snap = false; autoT = 0; heldAt = room.startYaw ? performance.now() : -1e9;
     camPos.copy(room.eye); camLook.set(room.eye.x + Math.sin(room.yawCenter + yawUser), room.eye.y + room.pitch, room.eye.z + Math.cos(room.yawCenter + yawUser));
-    signs.innerHTML = room.spots.map((s, i) => `<a class="sign ${s.back ? 'sign-back' : ''} ${s.plaque ? 'sign-3d' : ''}" data-spot="${i}" href="${s.href}"><strong>${s.back ? '← ' : ''}${s.label}</strong>${s.sub ? `<small>${s.sub}</small>` : ''}</a>`).join('');
+    signs.innerHTML = room.spots.map((s, i) => `<a class="sign off ${s.back ? 'sign-back' : ''} ${s.plaque ? 'sign-3d' : ''}" data-spot="${i}" href="${s.href}"><strong>${s.back ? '← ' : ''}${s.label}</strong>${s.sub ? `<small>${s.sub}</small>` : ''}</a>`).join('');
   }
   if ((focus !== focusName || detail !== detailId) && room.panels) { for (const p of Object.values(room.panels)) { p.scroll = 0; p.open = null; } }
   const fresh = room.key === key && !room.shown;
