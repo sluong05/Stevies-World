@@ -5,6 +5,7 @@
 // Signs are real links laid over the canvas, so everything still works by keyboard and
 // screen reader, and the page keeps a plain list of doors in case WebGL is unavailable.
 import * as THREE from '../vendor/three.module.min.js';
+import { exitDoor } from './exitdoor.js';
 import { byType, getItem, isSaved, search, toggleSaved, syncState } from './store.js';
 import { toggleTask, toggleStar, toggleStep, quickAdd } from './todo.js';
 import { groupTasks, dueLabel, todayISO, parseQuickTask } from '../shared/tasks.js';
@@ -1447,6 +1448,7 @@ function tapAt(x, y) {
   if (!room) return;
   const r = renderer.domElement.getBoundingClientRect();
   ray.setFromCamera(new THREE.Vector2(((x - r.left) / r.width) * 2 - 1, -((y - r.top) / r.height) * 2 + 1), room.camera);
+  if (room.exit?.hit(ray)) { blurTyping(); location.hash = '#/'; return; }
   const p = focusName && room.panels?.[focusName];
   if (p) {
     const hit = ray.intersectObject(p.mesh)[0];
@@ -1534,6 +1536,7 @@ function frame() {
     cam.position.copy(camPos); cam.lookAt(camLook);
     room.update(reduced ? 0 : dt, t);
   }
+  room.exit?.place(cam);
   renderer.render(room.scene, cam);
   placeSigns();
   document.body.classList.add('world-live');
@@ -1585,6 +1588,7 @@ export function show(name, theme, focus = null, detail = null) {
     stop(); disposeRoom();
     const built = ROOMS[name](night);
     room = { ...built, key, camera: new THREE.PerspectiveCamera(60, 1, 0.05, 60) };
+    if (name !== 'living') { room.exit = exitDoor(); room.scene.add(room.exit.group); }
     room.scene.background = new THREE.Color(night ? 0x1a1410 : 0xf3e6cc);
     room.scene.updateMatrixWorld(true);
     clock = new THREE.Clock();

@@ -2,6 +2,7 @@
 // (one bay of shelves per month). Tap a book and it slides off the shelf, turns to you
 // and opens, and its pages hold that day's thoughts plus the plan for the next gym visit.
 import * as THREE from '../vendor/three.module.min.js';
+import { exitDoor } from './exitdoor.js';
 import { byType, getItem, saveItem, deleteItem } from './store.js';
 import { escape, icon, toast } from './ui.js';
 import { todayISO } from '../shared/tasks.js';
@@ -216,6 +217,7 @@ function buildScene() {
   scene.fog = new THREE.Fog('#1b120c', 2.2, 5.5);
   const camera = new THREE.PerspectiveCamera(45, 1, 0.02, 20);
   Object.assign(S, { renderer, scene, camera, clock: new THREE.Clock(), camX: 0, camTarget: 0, vel: 0 });
+  S.exit = exitDoor(); scene.add(S.exit.group);
 
   // Light: a warm lamp that travels with you, a flickering hearth glow, and soft fill.
   scene.add(new THREE.HemisphereLight('#ffd9a8', '#2a1a10', 0.8));
@@ -466,6 +468,11 @@ function bindPointer() {
     down.lastX = e.clientX; down.lastT = now;
   });
   const up = e => {
+    { // the little door back to the living room
+      const r = S.renderer.domElement.getBoundingClientRect();
+      ray.setFromCamera(new THREE.Vector2(((e.clientX - r.left) / r.width) * 2 - 1, -((e.clientY - r.top) / r.height) * 2 + 1), S.camera);
+      if (S.exit?.hit(ray)) { down = null; S.openTap = null; location.hash = '#/'; return; }
+    }
     if (S.open && S.openTap) {
       const moved = Math.hypot(e.clientX - S.openTap.x, e.clientY - S.openTap.y) > 10;
       S.openTap = null;
@@ -874,6 +881,7 @@ function loop() {
     p.setX(i, p.getX(i) + Math.sin(t * 0.5 + i) * 0.0003);
   }
   p.needsUpdate = true;
+  S.exit?.place(cam);
   S.renderer.render(S.scene, cam);
 }
 
