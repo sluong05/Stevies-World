@@ -453,7 +453,8 @@ function gym(night) {
   [-0.6, 0.6].forEach(x => box(0.06, 1.2, 0.06, 0x3a3f47, x, 0.6, -0.75, bench));
   const bar = cyl(0.025, 0.025, 2.0, 0x9aa3ab, 0, 1.15, -0.75, bench, 8); bar.rotation.z = Math.PI / 2;
   [-0.8, 0.8].forEach(x => { const p = cyl(0.3, 0.3, 0.08, accent, x, 1.15, -0.75, bench, 24); p.rotation.z = Math.PI / 2; });
-  bench.position.set(-2.4, 0, -0.6); bench.rotation.y = 0.4; scene.add(bench);
+  // kept to the side, out of the line of sight from the room to the whiteboard
+  bench.position.set(-3.3, 0, 1.2); bench.rotation.y = 0.4; scene.add(bench);
   // yoga mat + kettlebells
   const yoga = box(0.7, 0.02, 1.8, 0x8a5a9a, 2.2, 0.01, -1.0); scene.add(yoga);
   [[1.4, -2.2, 0.16], [1.7, -2.3, 0.13], [1.95, -2.25, 0.1]].forEach(([x, z, r]) => {
