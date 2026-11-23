@@ -842,3 +842,8 @@ body.lib-reading .kit-top { opacity: 0; pointer-events: none; }
 body:not([data-room="living"]) .move-hint, body[data-screen=""] .move-hint { display: none; }
 [data-theme="retro"] .move-hint { border-radius: 0; background: var(--card); color: #000; box-shadow: var(--bevel-out); }
 @keyframes hint-in { from { opacity: 0; transform: translate(-50%, 8px); } }
+
+/* Top bar on every screen: keep the name on one line, and on narrow phones drop the wordmark
+   when a room name is showing so home, add and settings always fit. */
+.brand span { white-space: nowrap; }
+@media (max-width: 420px) { .topbar:has(.room-name:not(:empty)) .brand span { display: none; } }
