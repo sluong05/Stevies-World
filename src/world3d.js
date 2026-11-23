@@ -341,7 +341,7 @@ function livingRoom(night) {
 
   let lblink = 0;
   return {
-    scene, spots, eye: new THREE.Vector3(0, 1.65, 3.4), yawCenter: Math.PI, yawRange: 1.55, pitch: -0.14,
+    scene, spots, eye: new THREE.Vector3(0, 1.65, 3.4), yawCenter: Math.PI, yawRange: 1.55, pitch: -0.14, startYaw: 0.8, // open facing the Kitchen door, so a door is on screen without dragging
     focus: { notepad: focusOf(addPanel.mesh), panel: focusOf(setPanel.mesh) },
     panels: lpanels,
     refresh() { addPanel.dirty = true; setPanel.dirty = true; },
@@ -1427,7 +1427,7 @@ function ensure() {
     down.lx = e.clientX; down.ly = e.clientY;
     const p = focusName && room.panels?.[focusName];
     if (p) { p.scroll = Math.max(0, Math.min(p.maxScroll, p.scroll - dy * (p.canvas.height / (host.clientHeight * 0.9)))); p.dirty = true; }
-    else { yawVel += dx * 2.2; heldAt = performance.now(); }
+    else { yawVel += dx * 2.2; heldAt = performance.now(); if (Math.abs(e.clientX - down.x) > 12) hideHint(); }
     wake();
   });
   document.addEventListener('pointerup', e => {
@@ -1440,6 +1440,14 @@ function ensure() {
     if (!p || !e.target.closest?.('.room-stage')) return;
     p.scroll = Math.max(0, Math.min(p.maxScroll, p.scroll + e.deltaY)); p.dirty = true; wake();
   }, { passive: true });
+  // Arrow keys turn the view (desktop) without clicking the canvas first.
+  document.addEventListener('keydown', e => {
+    if (!room || focusName || flying || e.altKey || e.metaKey || e.ctrlKey) return;
+    if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return;
+    if (e.target.closest?.('input, textarea, select, [contenteditable="true"]') || document.body.classList.contains('in-mode')) return;
+    e.preventDefault();
+    yawVel += e.key === 'ArrowLeft' ? 0.09 : -0.09; heldAt = performance.now(); hideHint(); wake();
+  });
   signs.addEventListener('click', e => {
     const a = e.target.closest('a[data-spot]');
     if (!a) return;
@@ -1449,9 +1457,27 @@ function ensure() {
   return renderer;
 }
 
+// First visit: a short hint on how to move around the living room.
+const HINT_KEY = 'sw.moveHint';
+let hintEl = null, hintTimer = 0;
+function showHint() {
+  if (room?.key?.split('|')[0] !== 'living' || hintEl?.isConnected) return;
+  try { if (localStorage.getItem(HINT_KEY)) return; } catch { return; }
+  hintEl ||= Object.assign(document.createElement('p'), { className: 'move-hint', role: 'status' });
+  hintEl.innerHTML = matchMedia('(pointer: fine)').matches ? 'Drag or use ← → to look around<br>Click a door to go in' : 'Drag to look around<br>Tap a door to go in';
+  document.body.append(hintEl);
+  clearTimeout(hintTimer); hintTimer = setTimeout(hideHint, 9000);
+}
+function hideHint() {
+  if (!hintEl?.isConnected) return;
+  try { localStorage.setItem(HINT_KEY, '1'); } catch { /* ignore */ }
+  hintEl.classList.add('gone'); const el = hintEl; setTimeout(() => el.remove(), 400);
+}
+
 const ray = new THREE.Raycaster();
 function tapAt(x, y) {
   if (!room) return;
+  hideHint();
   const r = renderer.domElement.getBoundingClientRect();
   ray.setFromCamera(new THREE.Vector2(((x - r.left) / r.width) * 2 - 1, -((y - r.top) / r.height) * 2 + 1), room.camera);
   const p = focusName && room.panels?.[focusName];
@@ -1577,7 +1603,7 @@ function disposeRoom() {
 // focus zooms the camera onto something in the room ('monitor' or 'board' in the office).
 export function show(name, theme, focus = null, detail = null) {
   if (!name || theme === 'plain') {
-    stop(); disposeRoom(); focusName = null;
+    stop(); disposeRoom(); focusName = null; hintEl?.remove();
     document.body.classList.remove('world-live', 'world-walking');
     if (signs) signs.innerHTML = '';
     blurTyping();
@@ -1595,8 +1621,8 @@ export function show(name, theme, focus = null, detail = null) {
     room.scene.background = new THREE.Color(night ? 0x1a1410 : 0xf3e6cc);
     room.scene.updateMatrixWorld(true);
     clock = new THREE.Clock();
-    yawUser = 0; yawVel = 0; flying = null; snap = false; autoT = 0; heldAt = -1e9;
-    camPos.copy(room.eye); camLook.set(room.eye.x + Math.sin(room.yawCenter), room.eye.y + room.pitch, room.eye.z + Math.cos(room.yawCenter));
+    yawUser = room.startYaw || 0; yawVel = 0; flying = null; snap = false; autoT = 0; heldAt = room.startYaw ? performance.now() : -1e9;
+    camPos.copy(room.eye); camLook.set(room.eye.x + Math.sin(room.yawCenter + yawUser), room.eye.y + room.pitch, room.eye.z + Math.cos(room.yawCenter + yawUser));
     signs.innerHTML = room.spots.map((s, i) => `<a class="sign ${s.back ? 'sign-back' : ''} ${s.plaque ? 'sign-3d' : ''}" data-spot="${i}" href="${s.href}"><strong>${s.back ? '← ' : ''}${s.label}</strong>${s.sub ? `<small>${s.sub}</small>` : ''}</a>`).join('');
   }
   if ((focus !== focusName || detail !== detailId) && room.panels) { for (const p of Object.values(room.panels)) { p.scroll = 0; p.open = null; } }
@@ -1607,5 +1633,6 @@ export function show(name, theme, focus = null, detail = null) {
   if (focusName !== 'notepad' && document.activeElement === addInput) addInput.blur();
   if (focusName !== 'panel' && document.activeElement === passInput) passInput.blur();
   room.refresh?.();
+  if (focusName) hintEl?.remove(); else showHint();
   resize(); onScroll(); wake();
 }
