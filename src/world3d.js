@@ -940,11 +940,7 @@ function drawSettings(p, night) {
     g.font = `400 24px ${FONT}`; g.textBaseline = 'middle';
     caretText(g, 54, y + 31, passInput?.value || '', sy.hasPasscode ? 'New passcode' : 'Passcode', passInput, W - 270, ink, soft, true);
     p.hits.push({ x: 30, y, w: W - 220, h: 60, fn: () => focusTyper(passInput), keep: true, field: true });
-    pill(p, W - 180, y, 150, 60, sy.hasPasscode ? 'Update' : 'Connect', { fill: green, text: '#fff', fn: () => {
-      const inp = fb('form[data-form="passcode"] input[name="passcode"]'); const form = fb('form[data-form="passcode"]');
-      if (!inp || !form || !passInput.value) { focusTyper(passInput); return; }
-      inp.value = passInput.value; passInput.value = ''; form.requestSubmit();
-    } });
+    pill(p, W - 180, y, 150, 60, sy.hasPasscode ? 'Update' : 'Connect', { fill: green, text: '#fff', fn: submitPass });
     y += 76;
     if (sy.hasPasscode) {
       pill(p, 30, y, 200, 54, 'Sync now', { stroke: green, text: green, fn: () => press('[data-action="sync-now"]') });
@@ -1377,6 +1373,14 @@ const ROOMS = { living: livingRoom, kitchen, gym, office };
 
 // ---------- typing on the monitor ----------
 let deskInput = null, searchInput = null, addInput = null, passInput = null, detailId = null;
+let passForm = null;
+// The sync passcode is typed into a real, visible password field (in a form with a username),
+// so password managers can offer and save it. It shows over the scene while it has focus.
+function submitPass() {
+  const inp = fb('form[data-form="passcode"] input[name="passcode"]'); const form = fb('form[data-form="passcode"]');
+  if (!inp || !form || !passInput.value) { focusTyper(passInput); return; }
+  inp.value = passInput.value; passInput.value = ''; passInput.blur(); form.requestSubmit();
+}
 function focusTyper(el) { el?.focus({ preventScroll: true }); for (const p of Object.values(room?.panels || {})) p.dirty = true; }
 function focusSearch() { searchInput?.focus({ preventScroll: true }); if (room?.panels?.whiteboard) room.panels.whiteboard.dirty = true; }
 const blurTyping = () => { for (const el of [deskInput, searchInput, addInput, passInput]) if (el && document.activeElement === el) el.blur(); typingIn()?.blur(); };
@@ -1415,9 +1419,14 @@ function ensure() {
   searchInput.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); searchInput.blur(); } });
   addInput = document.createElement('textarea');
   addInput.className = 'lib-hidden-input'; addInput.id = 'add-input'; addInput.setAttribute('aria-label', 'Paste a link or the caption text'); addInput.autocapitalize = 'off'; addInput.spellcheck = false;
-  passInput = document.createElement('input');
-  passInput.className = 'lib-hidden-input'; passInput.id = 'pass-input'; passInput.type = 'password'; passInput.autocomplete = 'current-password'; passInput.setAttribute('aria-label', 'Sync passcode');
-  document.body.append(addInput, passInput);
+  passForm = document.createElement('form');
+  passForm.className = 'pass-form'; passForm.setAttribute('aria-label', 'Sync passcode');
+  passForm.innerHTML = '<input class="sr-only" type="text" name="username" autocomplete="username" value="Stevies World" readonly tabindex="-1" aria-hidden="true" /><input id="pass-input" name="password" type="password" autocomplete="current-password" enterkeyhint="go" placeholder="Sync passcode" aria-label="Sync passcode" /><button type="submit">Connect</button>';
+  passInput = passForm.querySelector('#pass-input');
+  passForm.addEventListener('submit', e => { e.preventDefault(); submitPass(); });
+  passInput.addEventListener('focus', () => document.body.classList.add('pass-live'));
+  passInput.addEventListener('blur', () => setTimeout(() => { if (document.activeElement !== passInput) document.body.classList.remove('pass-live'); }, 150));
+  document.body.append(addInput, passForm);
   for (const el of [addInput, passInput]) {
     el.addEventListener('input', () => { for (const p of Object.values(room?.panels || {})) p.dirty = true; });
     el.addEventListener('blur', () => { for (const p of Object.values(room?.panels || {})) p.dirty = true; });

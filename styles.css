@@ -872,3 +872,11 @@ body.in-kitchen .search-btn { display: grid; }
 .ingredients.checkable input { width: 22px; height: 22px; margin: 1px 0 0; flex: none; accent-color: var(--accent); }
 .ingredients.checkable li.got span { text-decoration: line-through; color: var(--ink-soft); }
 .scaled-note { font-size: 13px; font-weight: 500; color: var(--ink-soft); margin-left: 6px; }
+
+/* Sync passcode: a real password field (so password managers work), shown while it has focus */
+.pass-form { position: fixed; left: -9999px; top: 0; opacity: 0; }
+body.pass-live .pass-form { left: 12px; right: 12px; top: calc(64px + env(safe-area-inset-top)); opacity: 1; z-index: 40; display: flex; gap: 8px; padding: 10px;
+  max-width: 520px; margin: 0 auto; border-radius: 18px; background: #f6ead2; box-shadow: 0 10px 28px -10px rgba(40, 24, 10, .6), inset 0 0 0 2px #b88a4a; }
+.pass-form #pass-input { flex: 1; min-width: 0; height: 46px; padding: 0 16px; border-radius: 23px; border: 2px solid #3f6e3c; background: #fffaf0; color: #2c2418; font: 16px var(--font-body); }
+.pass-form button { height: 46px; padding: 0 18px; border: 0; border-radius: 23px; background: #3f6e3c; color: #fff; font: 600 16px var(--font-body); }
+[data-theme="retro"] .pass-form, [data-theme="retro"] .pass-form input, [data-theme="retro"] .pass-form button { border-radius: 0; }
