@@ -46,7 +46,11 @@ export function mount(root, bookKey = '', recipeId = '') {
   document.body.classList.add('in-library', 'in-kitchen');
   try { buildRenderer(); buildScene(); }
   catch (error) { console.warn('Kitchen 3D unavailable', error); unmount(); root.innerHTML = listView('recipe'); return; }
+  // Size and place the camera now: a deep link (#/recipes/<book>) opens the book straight away,
+  // before the ResizeObserver or the render loop has set the camera up.
+  resize();
   focusBay(firstBay(), true);
+  { const midY = (shelfY(0) + 0.5 + COUNTER_Y - 0.12) / 2 - 0.03; S.camera.position.set(S.camX, midY + 0.12, DEPTH / 2 + S.dist); S.camera.lookAt(S.camX, midY, 0); S.camera.updateMatrixWorld(); }
   if (bookKey) route(bookKey, recipeId);
 }
 
