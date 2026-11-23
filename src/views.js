@@ -232,7 +232,7 @@ export function itemView(id) {
 // ---------- the house ----------
 export const DOORS = [
   ['#/recipes', 'Kitchen', 'Recipes', 'bowl'],
-  ['#/workouts', 'Gym', 'Workouts', 'dumbbell'],
+  ['#/gym', 'Gym', 'Workouts', 'dumbbell'],
   ['#/library', 'Library', 'Journal', 'book'],
   ['#/office', 'Office', 'To-do & Notes', 'checkbox'],
 ];
