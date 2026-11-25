@@ -9,6 +9,9 @@ import { toast } from './ui.js';
 import { listView } from './views.js';
 import { cookbooks, GROUPINGS } from '../shared/cookbooks.js';
 import { cuisineOf } from '../shared/cuisine.js';
+import { recipeTimes } from '../shared/times.js';
+import { readPlan, writePlan, planSummary, randomWeek } from '../shared/weekplan.js';
+import { readableSources } from '../shared/commons.js';
 import { rand, BOOK_COLORS, canvasTex, woodTex, shade, ease, PAGE_W, PAGE_H, INK, FADED, LABEL, HAND, curvedPage, layout, paper } from './library.js';
 
 // ---------- layout ----------
@@ -24,6 +27,7 @@ const groupBy = () => { try { const v = localStorage.getItem(GROUP_KEY); return 
 const setGroupBy = v => { try { localStorage.setItem(GROUP_KEY, v); } catch { /* ignore */ } };
 const recipes = () => byType('recipe');
 const minutes = m => (m >= 60 ? `${Math.floor(m / 60)} h${m % 60 ? ` ${m % 60} min` : ''}` : `${m} min`);
+const timeText = r => { const t = recipeTimes(r); return !t.active ? '' : t.passive ? `${minutes(t.active)} active, ${minutes(t.total)} total` : minutes(t.active); };
 
 let S = null;
 export const mounted = () => Boolean(S);
@@ -34,7 +38,8 @@ export function mount(root, bookKey = '', recipeId = '') {
     <div class="lib-stage" aria-label="Kitchen: cookbook shelves above the worktop"></div>
     <div class="lib-dim"></div>
     <input class="lib-hidden-input" id="kit-search" type="search" enterkeyhint="search" autocomplete="off" aria-label="Search recipes" />
-    <button class="lib-hidden-input" data-action="paste-link" tabindex="-1" aria-hidden="true"></button>`;
+    <button class="lib-hidden-input" data-action="paste-link" tabindex="-1" aria-hidden="true"></button>
+    <article class="sr-only" id="kit-readout" aria-label="Open cookbook page"></article>`;
   S = { root, stage: root.querySelector('.lib-stage'), searchInput: root.querySelector('#kit-search'), query: '', books: new Map(), bays: [], open: null, busy: false, raf: 0, listeners: [], photos: new Map() };
   const on = (target, type, fn, opts) => { target.addEventListener(type, fn, opts); S.listeners.push(() => target.removeEventListener(type, fn, opts)); };
   S.on = on;
@@ -52,7 +57,7 @@ export function mount(root, bookKey = '', recipeId = '') {
   resize();
   focusBay(firstBay(), true);
   { const midY = (shelfY(0) + 0.5 + COUNTER_Y - 0.12) / 2 - 0.03; S.camera.position.set(S.camX, midY + 0.12, DEPTH / 2 + S.dist); S.camera.lookAt(S.camX, midY, 0); S.camera.updateMatrixWorld(); }
-  if (bookKey) route(bookKey, recipeId);
+  if (bookKey || /[?&]plan\b/.test(location.hash)) route(bookKey, recipeId);
 }
 
 export function unmount() {
@@ -71,6 +76,7 @@ export function unmount() {
 /** Called by the router for #/recipes, #/recipes/<book> and #/recipes/<book>/<recipe>. */
 export function route(bookKey, recipeId = '') {
   if (!S) return;
+  if (!bookKey && /[?&]plan\b/.test(location.hash)) { S.chalkView = 'plan'; if (S.open) closeBook().then(() => S && (zoomTo('chalk'), drawChalk())); else { zoomTo('chalk'); drawChalk(); } return; }
   if (!bookKey) { if (S.open) closeBook(); return; }
   const b = S.books.get(bookKey);
   if (!b) { if (S.open) closeBook(); else location.replace('#/recipes'); return; }
@@ -198,6 +204,7 @@ function drawChalk() {
   g.textBaseline = 'alphabetic'; g.textAlign = 'left';
   const q = S.query || '';
   const focused = document.activeElement === S.searchInput;
+  if (!q && S.chalkView === 'plan') { drawPlan(g, regions); tex.needsUpdate = true; return; }
   // search line
   g.strokeStyle = 'rgba(244,241,232,.75)'; g.lineWidth = 3; rrect(g, 30, 26, CHALK_W - 60, 70, 35); g.stroke();
   chalkLine(g, '⌕', 52, 76, 40);
@@ -238,11 +245,59 @@ function drawChalk() {
       chalkLine(g, '▸', CHALK_W - 70, 304, 56, i < S.bays.length - 1 ? '#f4f1e8' : 'rgba(244,241,232,.2)');
       regions.push({ x0: 0, x1: 160, y0: 240, y1: 350, act: 'prev-bay' }, { x0: CHALK_W - 160, x1: CHALK_W, y0: 240, y1: 350, act: 'next-bay' });
       const n = recipes().length;
-      chalkLine(g, n ? `${n} recipes · tap a book to open it` : 'Tap the recipe box to add one', CHALK_W / 2, 400, 24, 'rgba(244,241,232,.6)', 'Georgia, serif');
+      chalkLine(g, n ? `${n} recipes · tap a book to open it` : 'Tap the recipe box to add one', CHALK_W / 2, 386, 24, 'rgba(244,241,232,.6)', 'Georgia, serif');
+      // Plan my week: a line that opens the plan on the board
+      const plan = planned();
+      g.strokeStyle = 'rgba(245,217,138,.8)'; g.lineWidth = 2; rrect(g, 70, 408, CHALK_W - 140, 52, 26); g.stroke();
+      chalkLine(g, plan.length ? `This week: ${plan.length} meal${plan.length === 1 ? '' : 's'}${weekLine(plan, true)}  ▸` : '🗓  Plan my week  ▸', CHALK_W / 2, 443, 26, '#f5d98a');
+      regions.push({ x0: 40, x1: CHALK_W - 40, y0: 400, y1: CHALK_H, act: 'plan' });
       g.textAlign = 'left';
     }
   }
   tex.needsUpdate = true;
+}
+
+// ---------- Plan my week ----------
+const DAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+const planned = () => readPlan().map(id => getItem(id)).filter(r => r?.type === 'recipe');
+function weekLine(plan, short = false) {
+  const s = planSummary(plan);
+  const bits = [s.cost ? `$${s.cost.toFixed(2)}` : '', s.proteinPerDay !== null ? `${Math.round(s.proteinPerDay)} g protein/day` : ''].filter(Boolean);
+  return bits.length ? `${short ? ' · ' : ''}${bits.join(' · ')}` : '';
+}
+function drawPlan(g, regions) {
+  const plan = planned();
+  g.textAlign = 'left';
+  chalkLine(g, '◂', 40, 76, 44); chalkLine(g, 'This week', 84, 72, 36, '#f5d98a');
+  regions.push({ x0: 0, x1: 300, y0: 10, y1: 110, act: 'plan-back' });
+  g.textAlign = 'right'; chalkLine(g, '🎲 Shuffle', CHALK_W - 40, 72, 28); g.textAlign = 'left';
+  regions.push({ x0: CHALK_W - 230, x1: CHALK_W, y0: 10, y1: 110, act: 'plan-shuffle' });
+  if (!plan.length) {
+    chalkLine(g, 'Nothing planned yet.', 44, 170, 30, 'rgba(244,241,232,.8)');
+    chalkLine(g, 'Tap 🎲 Shuffle for a random week, or open', 44, 222, 24, 'rgba(244,241,232,.65)', 'Georgia, serif');
+    chalkLine(g, 'a recipe and tap “+ This week”.', 44, 256, 24, 'rgba(244,241,232,.65)', 'Georgia, serif');
+    return;
+  }
+  const rows = plan.slice(0, 7);
+  rows.forEach((r, i) => {
+    const y = 128 + i * 38;
+    chalkLine(g, DAYS[i] || '', 44, y, 22, 'rgba(245,217,138,.85)', 'Georgia, serif');
+    g.font = '27px "SW Macrons", "Kiwi Maru", Georgia, serif';
+    let t = r.title; while (g.measureText(t).width > CHALK_W - 230 && t.length > 4) t = t.slice(0, -2);
+    if (t !== r.title) t = `${t.trimEnd()}…`;
+    chalkLine(g, t, 104, y, 27);
+    chalkLine(g, '✕', CHALK_W - 70, y, 24, 'rgba(244,241,232,.6)');
+    regions.push({ x0: 0, x1: CHALK_W - 100, y0: y - 30, y1: y + 8, act: 'plan-open', id: r.id }, { x0: CHALK_W - 100, x1: CHALK_W, y0: y - 30, y1: y + 8, act: 'plan-remove', id: r.id });
+  });
+  if (plan.length > 7) chalkLine(g, `+ ${plan.length - 7} more`, 104, 128 + 7 * 38 - 8, 20, 'rgba(244,241,232,.6)', 'Georgia, serif');
+  const s = planSummary(plan);
+  g.strokeStyle = 'rgba(244,241,232,.35)'; g.lineWidth = 2; g.beginPath(); g.moveTo(40, 404); g.lineTo(CHALK_W - 40, 404); g.stroke();
+  const cost = s.cost ? `$${s.cost.toFixed(2)} to cook it all${s.costPerDay !== null ? ` · ~$${s.costPerDay.toFixed(2)} a day` : ''}` : 'No cost data';
+  const prot = s.proteinPerDay !== null ? `${Math.round(s.proteinPerDay)} g protein a day on average` : 'No protein data';
+  chalkLine(g, cost, 44, 436, 24, '#fffbe8', 'Georgia, serif');
+  chalkLine(g, prot, 44, 466, 24, '#fffbe8', 'Georgia, serif');
+  g.textAlign = 'right'; chalkLine(g, 'Clear', CHALK_W - 44, 466, 22, 'rgba(244,241,232,.6)', 'Georgia, serif'); g.textAlign = 'left';
+  regions.push({ x0: CHALK_W - 140, x1: CHALK_W, y0: 440, y1: CHALK_H, act: 'plan-clear' });
 }
 
 function drawCard() {
@@ -276,6 +331,12 @@ function onCounterTap(hit) {
     if (act === 'clear') { S.query = ''; S.searchInput.value = ''; S.searchInput.blur(); drawChalk(); }
     if (act === 'open') { const b = bookOf(reg.id); S.searchInput.blur(); if (b) location.hash = `#/recipes/${encodeURIComponent(b.key)}/${encodeURIComponent(reg.id)}`; }
     if (act === 'group') { const i = GROUPINGS.findIndex(x => x.key === groupBy()); setGroupBy(GROUPINGS[(i + 1) % GROUPINGS.length].key); rebuild(); }
+    if (act === 'plan') { S.chalkView = 'plan'; drawChalk(); }
+    if (act === 'plan-back') { S.chalkView = ''; drawChalk(); }
+    if (act === 'plan-shuffle') { writePlan(randomWeek(recipes(), isSaved)); drawChalk(); }
+    if (act === 'plan-clear') { writePlan([]); drawChalk(); }
+    if (act === 'plan-remove') { writePlan(readPlan().filter(id => id !== reg.id)); drawChalk(); }
+    if (act === 'plan-open') { const b = bookOf(reg.id); if (b) location.hash = `#/recipes/${encodeURIComponent(b.key)}/${encodeURIComponent(reg.id)}`; }
     if (act === 'prev-bay') focusBay(currentBay() - 1);
     if (act === 'next-bay') focusBay(currentBay() + 1);
     return;
@@ -647,7 +708,7 @@ function bindPointer() {
     if (!down.moved && Math.hypot(e.clientX - down.x, e.clientY - down.y) < 10) {
       const r = S.renderer.domElement.getBoundingClientRect();
       ray.setFromCamera(new THREE.Vector2(((e.clientX - r.left) / r.width) * 2 - 1, -((e.clientY - r.top) / r.height) * 2 + 1), S.camera);
-      if (S.exit?.hit(ray)) { down = null; location.hash = '#/'; return; }
+      if (S.exit?.group.visible && S.exit.hit(ray)) { down = null; location.hash = '#/'; return; }
     }
     const d = down; down = null;
     const dx = e.clientX - d.x, dy = e.clientY - d.y;
@@ -789,7 +850,7 @@ function loop() {
     const want = b.home.pos.z + (b.peek ? 0.035 : 0);
     if (Math.abs(b.group.position.z - want) > 0.0005 && !S.busy) b.group.position.z += (want - b.group.position.z) * 0.2;
   }
-  S.exit?.place(cam);
+  if (S.exit) { S.exit.group.visible = !S.open; S.exit.place(cam); }
   S.renderer.render(S.scene, cam);
 }
 
@@ -897,10 +958,10 @@ function paginate(book) {
     const kicker = [cuisineOf(r), r.category].filter(Boolean).join(' · ');
     if (kicker) put('kicker', kicker);
     put('title', r.title);
-    const meta = [r.minutes ? minutes(r.minutes) : '', r.servings ? `serves ${r.servings}` : '', r.nutrition?.protein ? `${Math.round(r.nutrition.protein)} g protein` : '', r.nutrition?.calories ? `${Math.round(r.nutrition.calories)} cal` : ''].filter(Boolean).join('  ·  ');
+    const meta = [timeText(r), r.servings ? `serves ${r.servings}` : '', r.nutrition?.protein ? `${Math.round(r.nutrition.protein)} g protein` : '', r.nutrition?.calories ? `${Math.round(r.nutrition.calories)} cal` : ''].filter(Boolean).join('  ·  ');
     if (meta) put('meta', meta);
-    y += 14; page.ops.push({ kind: 'actions', id: r.id, y }); y += 70;
-    if (r.photo?.src) {
+    y += 14; page.ops.push({ kind: 'actions', id: r.id, y }); y += 136;
+    if (r.photo?.src && !S.photos.get(r.photo.src)?.failed) {
       const h = 300;
       if (y + h + 20 > BOTTOM) newPage(true);
       y += 10; page.ops.push({ kind: 'photo', src: r.photo.src, alt: r.photo.alt || r.title, x: M, y, w: TEXT_W, h }); y += h + 4;
@@ -940,13 +1001,31 @@ function paginate(book) {
 function loadPhoto(src) {
   if (S.photos.has(src)) return S.photos.get(src);
   const img = new Image();
-  if (/^https?:/.test(src)) img.crossOrigin = 'anonymous';
+  const tries = readableSources(src);
+  if (/^https?:/.test(tries[0])) img.crossOrigin = 'anonymous';
   img.onload = () => { if (S?.open) paintSpread(); };
-  img.onerror = () => { img.failed = true; if (S?.open) paintSpread(); };
+  img.onerror = () => {
+    tries.shift();
+    if (tries.length) { img.src = tries[0]; return; }
+    // No readable copy: lay the pages out again without the photo box, so the description moves up.
+    img.failed = true; if (S?.open && !S.busy) repaginate(); else if (S) S.repaginate = true;
+  };
   img.decoding = 'async';
-  img.src = src;
+  img.src = tries[0];
   S.photos.set(src, img);
   return img;
+}
+
+// Re-lay the open book (a photo turned out to be unreadable), staying on the same recipe.
+function repaginate() {
+  if (!S?.open) return;
+  S.repaginate = false;
+  const here = S.pageList[S.cur]?.recipeId;
+  const { pages, starts } = paginate(S.open.book);
+  S.pageList = pages; S.starts = starts;
+  if (here && starts.has(here)) { const st = starts.get(here); S.spread = st / 2; S.cur = st + (S.cur % 2 && narrow() ? 1 : 0); }
+  S.spread = Math.min(S.spread, pages.length / 2 - 1); S.cur = Math.min(S.cur, pages.length - 1);
+  settleBook(); paintSpread();
 }
 
 function chip(g, regions, x, y, w, text, act, id, on) {
@@ -1001,7 +1080,7 @@ function drawPage(g, page, index, book, gutterLeft) {
           g.drawImage(img, (img.naturalWidth - sw) / 2, (img.naturalHeight - sh) / 2, sw, sh, op.x, op.y, op.w, op.h);
         } else {
           g.fillStyle = FADED; g.font = 'italic 24px Georgia, serif'; g.textAlign = 'center';
-          g.fillText(img.failed ? 'Photo on the full recipe page' : 'Loading photo…', op.x + op.w / 2, op.y + op.h / 2);
+          g.fillText('Loading photo…', op.x + op.w / 2, op.y + op.h / 2);
           g.textAlign = 'left';
         }
         g.strokeStyle = '#fbf6ea'; g.lineWidth = 10; g.strokeRect(op.x, op.y, op.w, op.h);
@@ -1014,6 +1093,8 @@ function drawPage(g, page, index, book, gutterLeft) {
         chip(g, regions, x, op.y, 200, fav ? '♥ Favorite' : '♡ Favorite', 'fav', op.id, fav); x += 214;
         if (r?.steps?.length) { chip(g, regions, x, op.y, 170, '▶ Cook', 'cook', op.id); x += 184; }
         chip(g, regions, x, op.y, 210, 'Full recipe ›', 'full', op.id);
+        const inPlan = readPlan().includes(op.id);
+        chip(g, regions, M, op.y + 66, 250, inPlan ? '✓ In this week' : '+ This week', 'plan', op.id, inPlan);
         continue;
       }
       const f = FONTS[op.kind];
@@ -1037,6 +1118,13 @@ async function pageAction(reg) {
   if (reg.act === 'shelf') location.hash = '#/recipes';
   if (reg.act === 'cook') location.hash = `#/item/${encodeURIComponent(reg.id)}/cook`;
   if (reg.act === 'full') location.hash = `#/item/${encodeURIComponent(reg.id)}`;
+  if (reg.act === 'plan') {
+    const plan = readPlan(), had = plan.includes(reg.id);
+    writePlan(had ? plan.filter(id => id !== reg.id) : [...plan, reg.id]);
+    const n = readPlan().length;
+    toast(had ? 'Taken off this week' : `Added to this week (${n} meal${n === 1 ? '' : 's'}). See the totals on the chalkboard.`);
+    drawChalk(); if (S?.open) paintSpread();
+  }
   if (reg.act === 'fav') { const on = await toggleSaved(reg.id); toast(on ? 'Added to favorites. It moves to the Favorites shelf when you close this book.' : 'Removed from favorites'); if (S?.open) paintSpread(); }
 }
 
@@ -1049,6 +1137,30 @@ function paintSpread() {
   paintTo(S.leftPage, S.spread * 2, false);
   paintTo(S.rightPage, S.spread * 2 + 1, true);
   updateTools();
+  readout();
+}
+
+// The pages are pictures on 3D paper, so keep a visually hidden copy of what's open for screen
+// readers and find-in-page: the recipe (title, kicker, times, ingredients, steps) or the contents.
+const esc = t => String(t ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
+function readout() {
+  const el = S?.root.querySelector('#kit-readout');
+  if (!el) return;
+  if (!S.open) { el.innerHTML = ''; return; }
+  const book = S.open.book;
+  const shown = [S.pageList[S.spread * 2], S.pageList[S.spread * 2 + 1]].filter(Boolean);
+  const ids = [...new Set(shown.map(p => p.recipeId).filter(Boolean))];
+  let html = `<p>Cookbook: ${esc(book.title)}, pages ${S.spread * 2 + 1} and ${S.spread * 2 + 2} of ${S.pageList.length}.</p>`;
+  if (!ids.length) html += `<h2>Contents</h2><ol>${book.recipes.map(r => `<li><a href="#/recipes/${encodeURIComponent(book.key)}/${encodeURIComponent(r.id)}">${esc(r.title)}</a></li>`).join('')}</ol>`;
+  for (const id of ids) {
+    const r = getItem(id); if (!r) continue;
+    const meta = [cuisineOf(r), r.category, timeText(r), r.servings ? `serves ${r.servings}` : '', r.nutrition?.protein ? `${Math.round(r.nutrition.protein)} g protein a serving` : '', Number.isFinite(r.cost?.total) ? `$${r.cost.total.toFixed(2)} for the recipe` : ''].filter(Boolean).join(' · ');
+    html += `<h2>${esc(r.title)}</h2><p>${esc(meta)}</p>${r.description ? `<p>${esc(r.description)}</p>` : ''}`
+      + (r.ingredients?.length ? `<h3>Ingredients</h3><ul>${r.ingredients.map(t => `<li>${esc(t)}</li>`).join('')}</ul>` : '')
+      + (r.steps?.length ? `<h3>Method</h3><ol>${r.steps.map(t => `<li>${esc(t)}</li>`).join('')}</ol>` : '')
+      + `<p><a href="#/item/${encodeURIComponent(r.id)}">Full recipe</a></p>`;
+  }
+  el.innerHTML = html;
 }
 
 // ---------- flipping ----------
@@ -1102,6 +1214,7 @@ async function turnTo(spread, cur) {
   if (!S?.open) return;
   pivot.visible = false;
   S.busy = false;
+  if (S.repaginate) repaginate();
 }
 
 // ---------- open and close ----------
@@ -1163,12 +1276,14 @@ async function openBook(b, recipeId) {
   await tween(650, t => { b.hinge.rotation.y = -Math.PI * 0.985 * t; });
   if (S?.open?.book !== b) return;
   S.busy = false; S.opening = false;
+  if (S.repaginate) repaginate();
 }
 
 async function closeBook(fast = false) {
   if (!S?.open) return;
   const b = S.open.book;
   S.open = null;
+  readout();
   document.body.classList.remove('lib-reading');
   S.root.querySelector('.lib-dim').classList.remove('on');
   S.busy = true; S.opening = false;
