@@ -7,6 +7,7 @@ import { editing, addView, editorView, startNew, startEdit, draftFromText, impor
 import { mode, modeView, enterMode, exitMode, startTimer, stopTimer } from './modes.js';
 import { settingsView, startHome, setStartHome } from './settings.js';
 import { dueLabel } from '../shared/tasks.js';
+import { readPlan, writePlan, randomWeek } from '../shared/weekplan.js';
 import { todoView, todoUi, quickPreview, toggleTask, toggleStar, toggleStep, quickAdd, clearDone } from './todo.js';
 
 applyTheme();
@@ -23,7 +24,23 @@ function parseRoute() {
   return { parts: path.split('/').filter(Boolean).map(decodeURIComponent), params: new URLSearchParams(qs), path };
 }
 
+// Room names people type by hand go to the right room; anything else unknown goes home with a note.
+const ALIASES = { kitchen: 'recipes', cookbook: 'recipes', cookbooks: 'recipes', recipe: 'recipes', journal: 'library', diary: 'library', books: 'library', workout: 'workouts', exercise: 'workouts', todos: 'todo', 'to-do': 'todo', tasks: 'todo', task: 'todo', note: 'notes', corkboard: 'notes', living: '', 'living-room': '', livingroom: '', house: '', dashboard: 'home', setting: 'settings' };
+const KNOWN = new Set(['', 'home', 'recipes', 'library', 'workouts', 'gym', 'notes', 'todo', 'office', 'item', 'add', 'new', 'edit', 'draft', 'settings']);
+function fixRoute() {
+  const hash = location.hash.replace(/^#/, '') || '/';
+  const [path, qs] = hash.split('?');
+  const [first = '', ...rest] = path.split('/').filter(Boolean);
+  const key = decodeURIComponent(first).toLowerCase();
+  if (KNOWN.has(first)) return false;
+  if (key in ALIASES) { location.replace(`#/${[ALIASES[key], ...rest].filter(Boolean).join('/')}${qs ? `?${qs}` : ''}`); return true; }
+  location.replace('#/');
+  toast(`There's no page at #${path}, so here's the living room.`);
+  return true;
+}
+
 function render({ keepScroll = false } = {}) {
+  if (fixRoute()) return;
   const { parts, params, path } = parseRoute();
   const [a, b, c] = parts;
   const routeKey = path;
@@ -201,7 +218,7 @@ document.addEventListener('click', async event => {
   if (!el) return;
   if (el.dataset.action === 'kitchen-search') { if (!kitchenMod?.openSearch()) location.hash = '#/recipes'; return; }
   const action = el.dataset.action;
-  if (['theme', 'save', 'filter', 'quick', 'pick', 'paste-link', 'clipboard', 'back', 'tag', 'revert', 'delete', 'remove-photo', 'mode-next', 'mode-prev', 'toggle-ingredients', 'timer-start', 'timer-stop', 'sync-now', 'forget-pass', 'export', 'task-toggle', 'task-star', 'step-toggle', 'set-due', 'todo-filter', 'clear-done'].includes(action)) event.preventDefault();
+  if (['theme', 'save', 'filter', 'quick', 'pick', 'plan-week', 'paste-link', 'clipboard', 'back', 'tag', 'revert', 'delete', 'remove-photo', 'mode-next', 'mode-prev', 'toggle-ingredients', 'timer-start', 'timer-stop', 'sync-now', 'forget-pass', 'export', 'task-toggle', 'task-star', 'step-toggle', 'set-due', 'todo-filter', 'clear-done'].includes(action)) event.preventDefault();
   switch (action) {
     case 'reload-app': location.reload(); break;
     case 'serves': { const it = store.getItem(el.dataset.id); if (!it) break; const n = Math.max(1, Math.min(48, (ui.serves.get(it.id) || it.servings || 1) + Number(el.dataset.delta))); if (n === it.servings) ui.serves.delete(it.id); else ui.serves.set(it.id, n); render({ keepScroll: true }); break; }
@@ -222,6 +239,12 @@ document.addEventListener('click', async event => {
       break;
     case 'filter': ui.filters[el.dataset.key] = el.dataset.value; render({ keepScroll: true }); break;
     case 'quick': ui.quick[el.dataset.key] = ui.quick[el.dataset.key] === el.dataset.value ? '' : el.dataset.value; render({ keepScroll: true }); break;
+    case 'plan-week': {
+      const pool = store.byType('recipe');
+      if (!readPlan().length) writePlan(randomWeek(pool, store.isSaved));
+      location.hash = '#/recipes?plan';
+      break;
+    }
     case 'pick': {
       const pool = store.byType(el.dataset.type);
       const favs = pool.filter(i => store.isSaved(i.id));

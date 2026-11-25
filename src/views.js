@@ -1,3 +1,4 @@
+import { recipeTimes } from '../shared/times.js';
 import { escape, icon, formatMinutes, exerciseCount, plural, renderBody, greeting, timeOfDay } from './ui.js';
 import { allItems, byType, getItem, isSaved, search, isBuiltIn, isEditedBuiltIn, syncState } from './store.js';
 import { scenery } from './scenery.js';
@@ -24,9 +25,16 @@ export function heartButton(item, cls = '') {
   return `<button class="heart ${cls} ${on ? 'on' : ''}" data-action="save" data-id="${escape(item.id)}" aria-pressed="${on}" aria-label="${on ? 'Remove from favorites' : 'Add to favorites'}">${icon('heart')}</button>`;
 }
 
+// "30 min active · 1 hr total" when the steps hide marinating or resting time.
+export const timeLabel = item => {
+  const t = recipeTimes(item);
+  if (!t.active) return '';
+  return t.passive ? `${formatMinutes(t.active)} active · ${formatMinutes(t.total)} total` : formatMinutes(t.active);
+};
+
 const metaBits = item => {
   const bits = [];
-  if (item.minutes) bits.push(`${icon('clock')}${formatMinutes(item.minutes)}`);
+  if (item.minutes) bits.push(`${icon('clock')}${timeLabel(item)}`);
   if (item.type === 'recipe' && protein(item) !== null) bits.push(`${icon('flame')}${Math.round(protein(item))} g protein`);
   if (item.type === 'recipe' && costPerServing(item) !== null) bits.push(`${icon('tag')}${money(costPerServing(item))} a serving`);
   if (item.type === 'workout') bits.push(`${icon('list')}${plural(exerciseCount(item), 'exercise')}`);
@@ -90,6 +98,7 @@ export function homeView() {
     </section>
     <div class="decide">
       <button class="btn btn-soft" data-action="pick" data-type="recipe" ${recipes.length ? '' : 'disabled'}>${icon('shuffle')}Pick a meal</button>
+      <button class="btn btn-soft" data-action="plan-week" ${recipes.length ? '' : 'disabled'}>${icon('list')}Plan my week</button>
       <button class="btn btn-soft" data-action="pick" data-type="workout" ${workouts.length ? '' : 'disabled'}>${icon('shuffle')}Pick a workout</button>
     </div>
     ${todoShelf()}
@@ -228,7 +237,7 @@ export function itemView(id) {
     : item.type === 'workout' && exerciseCount(item) ? `<a class="btn btn-primary" href="#/item/${encodeURIComponent(item.id)}/go">${icon('play')}Start workout</a>` : '';
   const source = item.sourceUrl ? `<a class="btn btn-ghost" href="${escape(item.sourceUrl)}" target="_blank" rel="noopener noreferrer">${icon('link')}${escape(item.sourceName ? `Open on ${item.sourceName.replace(/^.* on /, '')}` : 'Open original')}</a>` : '';
   const facts = [];
-  if (item.minutes) facts.push(`${icon('clock')}${formatMinutes(item.minutes)}`);
+  if (item.minutes) facts.push(`${icon('clock')}${timeLabel(item)}`);
   const serves = item.type === 'recipe' && item.servings ? ui.serves.get(item.id) || item.servings : 0;
   if (serves) facts.push(`${icon('people')}<span class="scaler"><button class="scale-btn" data-action="serves" data-id="${escape(item.id)}" data-delta="-1" aria-label="Fewer servings" ${serves <= 1 ? 'disabled' : ''}>−</button>Serves ${serves}<button class="scale-btn" data-action="serves" data-id="${escape(item.id)}" data-delta="1" aria-label="More servings">+</button></span>`);
   // the per-serving numbers sit with the time and servings, not at the bottom of the page
@@ -290,7 +299,7 @@ export function officeView() {
   const tasks = byType('task');
   const open = tasks.filter(t => !t.done).length;
   const notes = byType('note').length;
-  return `<section class="page-head"><div><h1>Office</h1><p class="page-sub">Tap the clipboard for your to-dos, or the corkboard for notes.</p></div></section>
+  return `<section class="page-head"><div><h1>Office</h1><p class="page-sub">Tap the monitor for your to-dos, or the corkboard for notes.</p></div></section>
     <div class="office-picks">
       <a class="office-pick" href="#/todo">${icon('checkbox')}<span><strong>To-do</strong><small>${open ? plural(open, 'thing') + ' left' : 'All clear'}</small></span></a>
       <a class="office-pick" href="#/notes">${icon('leaf')}<span><strong>Notes</strong><small>${plural(notes, 'note')}</small></span></a>

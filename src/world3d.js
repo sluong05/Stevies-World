@@ -125,7 +125,12 @@ function plaque(label, sub, w = 0.9, h = 0.34, { bg = '#f6e7c4', ink = '#4a3220'
     g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillStyle = ink;
     g.font = `600 ${Math.round(H * (sub ? 0.42 : 0.55))}px "SW Macrons", "Kiwi Maru", Georgia, serif`;
     g.fillText(label, W / 2, sub ? H * 0.4 : H / 2);
-    if (sub) { g.fillStyle = soft; g.font = `${Math.round(H * 0.26)}px "Zen Maru Gothic", system-ui, sans-serif`; g.fillText(sub, W / 2, H * 0.77); }
+    if (sub) {
+      g.fillStyle = soft;
+      let px = Math.round(H * 0.26); // shrink a long live preview to fit the plaque
+      do g.font = `${px}px "Zen Maru Gothic", system-ui, sans-serif`; while (g.measureText(sub).width > W - 36 && --px > 14);
+      g.fillText(sub, W / 2, H * 0.77);
+    }
   };
   paint();
   const tex = new THREE.CanvasTexture(c); tex.colorSpace = THREE.SRGBColorSpace; tex.anisotropy = 4;
@@ -136,7 +141,7 @@ function plaque(label, sub, w = 0.9, h = 0.34, { bg = '#f6e7c4', ink = '#4a3220'
   return m;
 }
 
-function door({ color = 0x8a5a3a, frame = 0xf3ead8, sign = 0xf6e7c4, arch = false, double = false, glass = false, peek = null, label = '', sub = '' }) {
+function door({ color = 0x8a5a3a, frame = 0xf3ead8, sign = 0xf6e7c4, arch = false, double = false, glass = false, peek = null, label = '', sub = '', night = false }) {
   const g = new THREE.Group();
   const W = double ? 1.7 : 1.05, H = 2.2;
   box(0.1, H + 0.1, 0.12, frame, -W / 2 - 0.05, H / 2, 0.04, g);
@@ -156,7 +161,13 @@ function door({ color = 0x8a5a3a, frame = 0xf3ead8, sign = 0xf6e7c4, arch = fals
     });
   } else {
     box(W, H, 0.06, color, 0, H / 2, 0.03, g);
-    if (glass) { const p = box(0.6, 0.5, 0.02, glow(0xbfe3f2), 0, H * 0.72, 0.065, g); p.material.transparent = true; p.material.opacity = 0.85; }
+    if (glass) {
+      // a window in the door, looking out on a little garden
+      const pane = outdoors(0.6, 0.5, night, g, 0.062); pane.position.y = H * 0.72;
+      box(0.66, 0.04, 0.03, frame, 0, H * 0.72 + 0.27, 0.07, g); box(0.66, 0.04, 0.03, frame, 0, H * 0.72 - 0.27, 0.07, g);
+      box(0.04, 0.5, 0.03, frame, -0.32, H * 0.72, 0.07, g); box(0.04, 0.5, 0.03, frame, 0.32, H * 0.72, 0.07, g);
+      box(0.025, 0.5, 0.02, frame, 0, H * 0.72, 0.07, g);
+    }
     else box(W - 0.3, 0.75, 0.02, new THREE.Color(color).multiplyScalar(0.82), 0, H * 0.68, 0.065, g);
     box(W - 0.3, 0.75, 0.02, new THREE.Color(color).multiplyScalar(0.82), 0, H * 0.28, 0.065, g);
     const knob = new THREE.Mesh(new THREE.SphereGeometry(0.045, 10, 8), mat(0xd8b45a));
@@ -178,16 +189,46 @@ function plant(x, z, parent, s = 1) {
   return g;
 }
 
+// The view outside, in the same flat low-poly style as the painting over the fireplace:
+// sky, sun or moon, two rolling hills, a couple of pine trees and a cloud. Centered on 0,0.
+function outdoors(w, h, night, parent, z = 0) {
+  const g = new THREE.Group();
+  const sky = box(w, h, 0.005, glow(night ? 0x1d2a52 : 0xa9d4ef), 0, 0, 0, g);
+  sky.renderOrder = 0;
+  const s = Math.min(w, h);
+  const orb = new THREE.Mesh(new THREE.CircleGeometry(s * 0.11, 16), glow(night ? 0xfff4d0 : 0xffd27a));
+  orb.position.set(w * 0.26, h * 0.22, 0.004); g.add(orb);
+  if (night) {
+    [[-0.3, 0.3], [-0.1, 0.38], [0.05, 0.18], [-0.38, 0.1]].forEach(([x, y]) => { const st = new THREE.Mesh(new THREE.CircleGeometry(s * 0.012, 5), glow(0xfff4d0)); st.position.set(w * x, h * y, 0.004); g.add(st); });
+  } else {
+    [[-0.22, 0.28, 0.07], [-0.13, 0.3, 0.09], [-0.05, 0.27, 0.06]].forEach(([x, y, r]) => { const c = new THREE.Mesh(new THREE.CircleGeometry(s * r, 10), glow(0xffffff)); c.position.set(w * x, h * y, 0.005); g.add(c); });
+  }
+  // rolling hills, cut off at the window's edges (a low-poly arc, flat along the bottom)
+  const hill = (cx, rx, ry, color, z) => {
+    const sh = new THREE.Shape(), pts = [];
+    for (let i = 0; i <= 14; i++) {
+      const x = Math.max(-w / 2, Math.min(w / 2, cx - rx + (2 * rx * i) / 14));
+      const u = (x - cx) / rx;
+      pts.push([x, -h / 2 + ry * Math.sqrt(Math.max(0, 1 - u * u))]);
+    }
+    sh.moveTo(pts[0][0], -h / 2); pts.forEach(([x, y]) => sh.lineTo(x, y)); sh.lineTo(pts.at(-1)[0], -h / 2);
+    const m = new THREE.Mesh(new THREE.ShapeGeometry(sh), glow(color)); m.position.z = z; g.add(m);
+  };
+  hill(-w * 0.2, w * 0.55, h * 0.5, night ? 0x2f4a3a : 0x9fcf7f, 0.006);
+  hill(w * 0.3, w * 0.6, h * 0.36, night ? 0x24392c : 0x6d9f55, 0.008);
+  [[-0.32, 0.9], [-0.2, 0.7], [0.36, 0.8]].forEach(([x, k]) => {
+    const tree = new THREE.Mesh(new THREE.ConeGeometry(s * 0.07 * k, s * 0.3 * k, 5), glow(night ? 0x1d3326 : 0x3f7a45));
+    tree.position.set(w * x, -h / 2 + h * 0.22 + s * 0.15 * k, 0.01); g.add(tree);
+    const trunk = box(s * 0.02 * k, s * 0.06 * k, 0.003, glow(night ? 0x2a1d18 : 0x7a4e33), w * x, -h / 2 + h * 0.22 + s * 0.005, 0.009, g);
+    trunk.position.y = tree.position.y - s * 0.17 * k;
+  });
+  g.position.z = z; parent.add(g);
+  return g;
+}
+
 function windowPane(sky, night, parent, w = 1.6, h = 1.3) {
   const g = new THREE.Group();
-  const pane = box(w, h, 0.02, glow(sky), 0, 0, 0, g);
-  if (night) {
-    const moon = new THREE.Mesh(new THREE.CircleGeometry(0.12, 20), glow(0xfff4d0));
-    moon.position.set(w * 0.25, h * 0.2, 0.02); g.add(moon);
-  } else {
-    const hill = new THREE.Mesh(new THREE.CircleGeometry(w * 0.7, 24, 0, Math.PI), glow(0x8fbf72));
-    hill.position.set(0, -h / 2, 0.015); g.add(hill);
-  }
+  outdoors(w, h, night, g, 0);
   box(w + 0.12, 0.08, 0.1, 0xf6efe0, 0, h / 2, 0.04, g);
   box(w + 0.2, 0.08, 0.18, 0xf6efe0, 0, -h / 2, 0.06, g);
   box(0.08, h, 0.08, 0xf6efe0, -w / 2, 0, 0.04, g);
@@ -221,6 +262,20 @@ function smoke(scene, origin, n = 8, color = 0xffffff) {
     p.scale.setScalar(0.12 + k * 0.4);
     p.material.opacity = reduced ? 0.2 : Math.sin(k * Math.PI) * 0.4;
   });
+}
+
+// Short live previews for the living room's door plaques (fall back to the room's usual subtitle).
+const clip = (t, n = 24) => (t.length > n ? `${t.slice(0, n - 1).trimEnd()}…` : t);
+function livePreviews() {
+  const out = {};
+  try {
+    const g = groupTasks(byType('task'), todayISO());
+    const next = g.overdue[0] || g.today[0] || g.upcoming[0];
+    if (next) out.Office = `${g.overdue[0] ? 'Overdue' : g.today[0] ? 'Today' : 'Next'}: ${clip(next.title)}`;
+    const recent = byType('workout').map(w => [w, lastDone(w.id)]).filter(([, at]) => at).sort((a, b) => b[1] - a[1])[0];
+    if (recent) out.Gym = `${clip(recent[0].title, 18)} · ${agoLabel(recent[1])}`;
+  } catch { /* previews are a nicety */ }
+  return out;
 }
 
 // ---------- rooms ----------
@@ -303,12 +358,15 @@ function livingRoom(night) {
   }
 
   // doors. Positions are chosen so the slow pan sweeps past all four.
+  // The Office and Gym plaques preview what's inside: the next to-do and the last workout.
   const doors = [
     { label: 'Kitchen', sub: 'Recipes', href: '#/recipes', side: 'left', along: -0.6, opts: { arch: true, peek: night ? 0xc89a5a : 0xf6dca8 } },
     { label: 'Library', sub: 'Journal', href: '#/library', side: 'left', along: 2.6, opts: { double: true, color: 0x6b3f2a } },
-    { label: 'Gym', sub: 'Workouts', href: '#/gym', side: 'right', along: 0.4, opts: { color: 0x3a6a8a, glass: true } },
+    { label: 'Gym', sub: 'Workouts', href: '#/gym', side: 'right', along: 0.4, opts: { color: 0x3a6a8a, glass: true, night } },
     { label: 'Office', sub: 'To-do & Notes', href: '#/office', side: 'right', along: 3.0, opts: { color: 0x7b8f4a } },
   ];
+  const live = livePreviews();
+  for (const d of doors) if (live[d.label]) d.sub = live[d.label];
   doors.forEach(d => {
     const g = door({ ...d.opts, label: d.label, sub: d.sub }); onWall(g, d.side, d.along, W, D); scene.add(g);
     const pos = g.localToWorld(new THREE.Vector3(0, 2.5, 0.1));
@@ -342,7 +400,9 @@ function livingRoom(night) {
 
   let lblink = 0;
   return {
-    scene, spots, eye: new THREE.Vector3(0, 1.65, 3.4), yawCenter: Math.PI, yawRange: 1.55, pitch: -0.14, startYaw: 0.8, // open facing the Kitchen door, so a door is on screen without dragging
+    scene, spots, eye: new THREE.Vector3(0, 1.65, 3.4), yawCenter: Math.PI, yawRange: 1.55, wrap: true, pitch: -0.14, startYaw: 0.8, // open facing the Kitchen door, so a door is on screen without dragging
+    // phones (portrait): stand further back by the front wall and look a little higher, so two or three doors fit
+    narrowEye: new THREE.Vector3(0, 1.7, 4.35), narrowPitch: -0.06, narrowFov: 92,
     focus: { notepad: focusOf(addPanel.mesh), panel: focusOf(setPanel.mesh) },
     panels: lpanels,
     refresh() { addPanel.dirty = true; setPanel.dirty = true; },
@@ -421,9 +481,11 @@ function gym(night) {
   lights(scene, night, 0xfff4e0);
   const spots = [];
   const accent = cssVar('--accent', '#3f6e3c');
-  // mirror over the rack
-  const mirror = box(2.8, 1.5, 0.03, glow(night ? 0x5a6a80 : 0xcfe2ea), 0, 1.65, 0.02);
-  const mg = new THREE.Group(); mg.add(mirror); box(2.9, 0.06, 0.05, 0x9aa3ab, 0, 2.42, 0.03, mg); box(2.9, 0.06, 0.05, 0x9aa3ab, 0, 0.88, 0.03, mg);
+  // a big window over the rack, looking out on the hills (it used to be a plain pale panel)
+  const mg = new THREE.Group();
+  const view = outdoors(2.8, 1.5, night, mg, 0.02); view.position.y = 1.65;
+  box(2.9, 0.06, 0.05, 0x9aa3ab, 0, 2.42, 0.03, mg); box(2.9, 0.06, 0.05, 0x9aa3ab, 0, 0.88, 0.03, mg);
+  [-1.42, 1.42, -0.47, 0.47].forEach(x => box(x === -1.42 || x === 1.42 ? 0.06 : 0.035, 1.5, 0.04, 0x9aa3ab, x, 1.65, 0.035, mg));
   onWall(mg, 'back', 1.2, W, D); scene.add(mg);
   // the workout whiteboard: every workout written up, with search, filters and favorites
   const wb = new THREE.Group();
@@ -473,7 +535,7 @@ function gym(night) {
   const clockFace = new THREE.Mesh(new THREE.CircleGeometry(0.3, 24), glow(0xffffff)); const cg = new THREE.Group(); cg.add(clockFace);
   const hand = box(0.02, 0.22, 0.01, 0x222222, 0, 0.1, 0.01, cg); const hand2 = box(0.02, 0.16, 0.01, 0xc4513f, 0, 0.07, 0.02, cg);
   cg.position.y = 2.9; onWall(cg, 'left', 0, W, D); cg.position.x += 0.02; scene.add(cg);
-  const back = door({ color: 0x3a6a8a, glass: true }); onWall(back, 'front', 0, W, D); scene.add(back);
+  const back = door({ color: 0x3a6a8a, glass: true, night }); onWall(back, 'front', 0, W, D); scene.add(back);
   scene.updateMatrixWorld(true);
   spots.push({ label: 'Workouts', sub: 'Whiteboard', href: '#/workouts', pos: wb.localToWorld(new THREE.Vector3(0, 1.12, 0.05)), target: wb.localToWorld(new THREE.Vector3(0, 0, 1.2)), mesh: wb, here: true });
   spots.push({ label: 'Living room', href: '#/', pos: back.localToWorld(new THREE.Vector3(0, 2.52, 0.1)), target: back.localToWorld(new THREE.Vector3(0, 1.2, 0.6)), mesh: back, back: true });
@@ -1349,7 +1411,7 @@ function office(night) {
   const back = door({ color: 0x7b8f4a }); onWall(back, 'front', 0, W, D); scene.add(back);
   scene.updateMatrixWorld(true);
   const at = (o, v) => o.localToWorld(new THREE.Vector3(...v));
-  spots.push({ label: 'To-do', sub: 'Monitor', href: '#/todo', pos: at(monitor, [0, 0.6, 0]), target: at(monitor, [0, 0, 1]), mesh: monitor, here: true });
+  spots.push({ label: 'To-do', sub: 'Monitor', href: '#/todo', pos: at(monitor, [0, 0.6, 0]), target: at(monitor, [0, 0, 1]), mesh: monitor, here: true, pad: 0.32 });
   spots.push({ label: 'Notes', sub: 'Corkboard', href: '#/notes', pos: at(board, [0, 0.98, 0.05]), target: at(board, [0, 0, 1.2]), mesh: board, here: true });
   spots.push({ label: 'Living room', href: '#/', pos: back.localToWorld(new THREE.Vector3(0, 2.52, 0.1)), target: back.localToWorld(new THREE.Vector3(0, 1.2, 0.6)), mesh: back, back: true });
   const panels = { monitor: todoPanel, board: boardPanel };
@@ -1446,14 +1508,16 @@ function ensure() {
   let down = null;
   document.addEventListener('pointerdown', e => {
     if (!room || !e.target.closest?.('.room-stage') || e.target.closest('a,button,input,select,textarea')) return;
-    down = { x: e.clientX, y: e.clientY, lx: e.clientX, ly: e.clientY, t: performance.now() }; heldAt = performance.now();
+    down = { x: e.clientX, y: e.clientY, lx: e.clientX, ly: e.clientY, t: performance.now(), yaw: yawUser }; heldAt = performance.now();
+    yawVel = 0; // a click stops the drift, so what's under the pointer stays under it
     // Stop the compatibility mousedown from focusing <main>, which would steal focus from a field a tap just focused.
     e.preventDefault();
   });
   document.addEventListener('pointermove', e => {
     if (!down) return;
     // ignore finger jitter, so a tap doesn't also turn the camera away from what was tapped
-    if (!down.moved && Math.hypot(e.clientX - down.x, e.clientY - down.y) < 14) return;
+    // (a mouse gets a smaller allowance than a finger, but still more than a hand's tremble)
+    if (!down.moved && Math.hypot(e.clientX - down.x, e.clientY - down.y) < (e.pointerType === 'mouse' ? 10 : 16)) return;
     down.moved = true;
     const dx = (e.clientX - down.lx) / innerWidth, dy = e.clientY - down.ly;
     down.lx = e.clientX; down.ly = e.clientY;
@@ -1463,7 +1527,10 @@ function ensure() {
     wake();
   });
   document.addEventListener('pointerup', e => {
-    if (down && !down.moved && performance.now() - down.t < 700) tapAt(e.clientX, e.clientY);
+    // A quick press that barely moved still counts as a click, even if it nudged the view: undo the nudge.
+    const quick = down && performance.now() - down.t < 450 && Math.hypot(e.clientX - down.x, e.clientY - down.y) < 24;
+    if (down && down.moved && quick && !focusName) { yawUser = down.yaw; yawVel = 0; }
+    if (down && ((!down.moved && performance.now() - down.t < 900) || quick)) tapAt(e.clientX, e.clientY);
     down = null;
   });
   document.addEventListener('pointercancel', () => { down = null; });
@@ -1533,7 +1600,7 @@ function tapAt(x, y) {
   // (not just its exact meshes or the sign), and take the nearest one.
   let best = null, bestD = Infinity;
   for (const s of room.spots) {
-    s.box ||= new THREE.Box3().setFromObject(s.mesh).expandByScalar(0.18);
+    s.box ||= new THREE.Box3().setFromObject(s.mesh).expandByScalar(s.pad ?? 0.18);
     const at = ray.ray.intersectBox(s.box, tmpHit);
     const d = at ? at.distanceToSquared(ray.ray.origin) : Infinity;
     if (d < bestD) { bestD = d; best = s; }
@@ -1562,13 +1629,14 @@ function walkTo(spot, href) {
   wake();
 }
 
+const isNarrow = () => Boolean(room?.camera && room.camera.aspect < 0.8);
 function resize() {
   if (!room || !renderer) return;
   const w = host.clientWidth, h = host.clientHeight;
   if (!w || !h) return;
   renderer.setSize(w, h, false);
   room.camera.aspect = w / h;
-  room.camera.fov = w / h < 0.8 ? 68 : 55;
+  room.camera.fov = w / h < 0.8 ? (room.narrowFov || 68) : 55;
   room.camera.updateProjectionMatrix();
 }
 
@@ -1613,10 +1681,13 @@ function frame() {
       // the slow look-around holds still for a while after you drag, so it doesn't pull your view away
       if (performance.now() - heldAt > 6000) autoT += dt;
       const auto = reduced ? 0 : Math.sin(autoT * 0.12) * room.yawRange * 0.85;
-      yawUser = Math.max(-room.yawRange - auto, Math.min(room.yawRange - auto, yawUser));
+      // the living room wraps all the way around; the other rooms stop at their walls
+      if (!room.wrap) yawUser = Math.max(-room.yawRange - auto, Math.min(room.yawRange - auto, yawUser));
       const yaw = room.yawCenter + auto + yawUser;
-      want.copy(room.eye); want.y += reduced ? 0 : Math.sin(t * 0.7) * 0.015;
-      wantLook.set(room.eye.x + Math.sin(yaw), room.eye.y + room.pitch, room.eye.z + Math.cos(yaw));
+      const eye = isNarrow() && room.narrowEye ? room.narrowEye : room.eye;
+      const pitch = isNarrow() && room.narrowPitch !== undefined ? room.narrowPitch : room.pitch;
+      want.copy(eye); want.y += reduced ? 0 : Math.sin(t * 0.7) * 0.015;
+      wantLook.set(eye.x + Math.sin(yaw), eye.y + pitch, eye.z + Math.cos(yaw));
     }
     const a = snap || reduced ? 1 : 1 - Math.exp(-dt * 4.5);
     snap = false;
@@ -1682,7 +1753,8 @@ export function show(name, theme, focus = null, detail = null) {
     room.scene.updateMatrixWorld(true);
     clock = new THREE.Clock();
     yawUser = room.startYaw || 0; yawVel = 0; flying = null; snap = false; autoT = 0; heldAt = room.startYaw ? performance.now() : -1e9;
-    camPos.copy(room.eye); camLook.set(room.eye.x + Math.sin(room.yawCenter + yawUser), room.eye.y + room.pitch, room.eye.z + Math.cos(room.yawCenter + yawUser));
+    const nar = innerWidth / Math.max(1, innerHeight) < 0.8 && room.narrowEye, eye0 = nar ? room.narrowEye : room.eye, pitch0 = nar ? room.narrowPitch : room.pitch;
+    camPos.copy(eye0); camLook.set(eye0.x + Math.sin(room.yawCenter + yawUser), eye0.y + pitch0, eye0.z + Math.cos(room.yawCenter + yawUser));
     signs.innerHTML = room.spots.map((s, i) => `<a class="sign off ${s.back ? 'sign-back' : ''} ${s.plaque ? 'sign-3d' : ''}" data-spot="${i}" href="${s.href}"><strong>${s.back ? '← ' : ''}${s.label}</strong>${s.sub ? `<small>${s.sub}</small>` : ''}</a>`).join('');
   }
   if ((focus !== focusName || detail !== detailId) && room.panels) { for (const p of Object.values(room.panels)) { p.scroll = 0; p.open = null; } }
